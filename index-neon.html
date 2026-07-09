@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Accounts Receivable</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink: #1C2B33;
+    --ink-soft: #2E4552;
+    --paper: #F6F3EC;
+    --paper-raised: #FFFFFF;
+    --line: #D8D2C2;
+    --line-strong: #B9B29D;
+    --amber: #B8892B;
+    --amber-bg: #FBF1DC;
+    --rust: #A23E2E;
+    --rust-bg: #F7E7E3;
+    --forest: #3F6B4F;
+    --forest-bg: #E6EFE7;
+    --text-dim: #6B6459;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
+
+  /* ---------- Login gate ---------- */
+  #loginScreen{
+    position:fixed; inset:0; background:var(--ink); display:flex; align-items:center; justify-content:center; z-index:100;
+  }
+  .login-card{
+    background:var(--paper); padding:48px 44px; width:320px; border-radius:2px;
+    box-shadow:0 30px 60px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .login-card::before{
+    content:""; position:absolute; left:28px; top:0; bottom:0; width:1px;
+    background:repeating-linear-gradient(var(--line-strong) 0 6px, transparent 6px 12px);
+  }
+  .login-card h1{font-size:22px; margin-bottom:4px; padding-left:14px;}
+  .login-card p{font-size:12.5px; color:var(--text-dim); margin:0 0 26px; padding-left:14px;}
+  .login-card form{padding-left:14px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px;}
+  .field input{width:100%; padding:10px 12px; border:1px solid var(--line-strong); background:var(--paper-raised); border-radius:3px; font-size:14px; font-family:'Inter',sans-serif;}
+  .field input:focus{outline:2px solid var(--ink-soft); outline-offset:1px;}
+  .btn{
+    appearance:none; border:none; cursor:pointer; font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px;
+    padding:11px 18px; border-radius:3px; background:var(--ink); color:var(--paper); letter-spacing:.01em;
+  }
+  .btn:hover{background:var(--ink-soft);}
+  .btn.secondary{background:transparent; color:var(--ink); border:1px solid var(--line-strong);}
+  .btn.secondary:hover{background:var(--line);}
+  .btn.danger{background:var(--rust); color:#fff;}
+  .btn.full{width:100%;}
+  #loginError{color:var(--rust); font-size:12.5px; margin-top:10px; padding-left:14px; display:none;}
+
+  /* ---------- Shell ---------- */
+  #app{display:none;}
+  header.top{
+    background:var(--ink); color:var(--paper); padding:22px 32px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:4px solid var(--amber);
+  }
+  header.top .brand{display:flex; align-items:baseline; gap:12px;}
+  header.top h1{font-size:24px; color:#fff;}
+  header.top .tag{font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:#9FB3BC;}
+  header.top .status-dot{width:7px; height:7px; border-radius:50%; background:#5AA36B; display:inline-block; margin-right:6px; box-shadow:0 0 0 3px rgba(90,163,107,.25);}
+  header.top .conn{font-size:11.5px; color:#B7C4CA; display:flex; align-items:center;}
+  header.top .actions{display:flex; gap:10px; align-items:center;}
+
+  main{max-width:1180px; margin:0 auto; padding:28px 32px 60px;}
+
+  /* ---------- Dashboard cards ---------- */
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:30px;}
+  .card{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:4px; padding:18px 20px; position:relative; overflow:hidden;
+  }
+  .card::before{content:attr(data-mark); position:absolute; right:14px; top:10px; font-family:'Fraunces',serif; font-size:34px; color:var(--line); font-weight:700; line-height:1;}
+  .card .label{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin-bottom:8px;}
+  .card .value{font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600;}
+  .card.total .value{color:var(--ink);}
+  .card.collected .value{color:var(--forest);}
+  .card.outstanding .value{color:var(--rust);}
+  .card.overdue .value{color:var(--amber);}
+  .card .sub{font-size:11.5px; color:var(--text-dim); margin-top:4px;}
+
+  .aging-strip{display:flex; gap:1px; margin-top:12px; border-radius:3px; overflow:hidden; height:8px;}
+  .aging-strip span{flex:1; background:var(--line);}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:14px; flex-wrap:wrap;}
+  .toolbar .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .search-box{position:relative;}
+  .search-box input{padding:9px 12px 9px 30px; border:1px solid var(--line-strong); border-radius:3px; font-size:13.5px; width:220px; background:var(--paper-raised); font-family:'Inter',sans-serif;}
+  .search-box::before{content:"⌕"; position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); font-size:14px;}
+  select.filter{padding:9px 10px; border:1px solid var(--line-strong); border-radius:3px; font-size:13px; background:var(--paper-raised); font-family:'Inter',sans-serif;}
+
+  /* ---------- Ledger table ---------- */
+  .ledger-wrap{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:4px; position:relative; overflow:hidden;
+  }
+  .ledger-wrap::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:34px; background:var(--ink);
+  }
+  table.ledger{width:100%; border-collapse:collapse; font-size:13.5px;}
+  table.ledger thead th{
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim);
+    padding:14px 14px 12px; border-bottom:1px solid var(--line-strong); font-weight:600;
+  }
+  table.ledger thead th:first-child{padding-left:44px;}
+  table.ledger tbody td{padding:13px 14px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  table.ledger tbody td:first-child{padding-left:44px; font-family:'IBM Plex Mono',monospace; color:var(--text-dim); font-size:12.5px;}
+  table.ledger tbody tr{cursor:pointer; transition:background .12s;}
+  table.ledger tbody tr:hover{background:#FAF8F2;}
+  table.ledger tbody tr:last-child td{border-bottom:none;}
+  td.amt{font-family:'IBM Plex Mono',monospace; text-align:right;}
+  td.name{font-weight:600;}
+  .remark-cell{color:var(--text-dim); font-size:12.5px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  .pill{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.03em;}
+  .pill.paid{background:var(--forest-bg); color:var(--forest);}
+  .pill.partial{background:var(--amber-bg); color:var(--amber);}
+  .pill.unpaid{background:var(--rust-bg); color:var(--rust);}
+  .aging-tag{font-size:11px; color:var(--text-dim); margin-left:6px;}
+  .aging-tag.warn{color:var(--amber); font-weight:600;}
+  .aging-tag.crit{color:var(--rust); font-weight:600;}
+
+  .empty-state{padding:60px 20px; text-align:center; color:var(--text-dim);}
+  .empty-state h3{font-size:18px; margin-bottom:6px; color:var(--ink);}
+
+  /* ---------- Modal ---------- */
+  .overlay{position:fixed; inset:0; background:rgba(28,43,51,.55); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:40px 20px; overflow-y:auto;}
+  .overlay.show{display:flex;}
+  .modal{background:var(--paper); width:100%; max-width:520px; border-radius:5px; box-shadow:0 30px 70px rgba(0,0,0,.4); position:relative;}
+  .modal-head{padding:22px 26px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start;}
+  .modal-head h2{font-size:19px;}
+  .modal-head .rn{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-dim); margin-top:4px;}
+  .modal-close{background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-dim); line-height:1; padding:4px;}
+  .modal-body{padding:22px 26px; max-height:60vh; overflow-y:auto;}
+  .modal-foot{padding:16px 26px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px;}
+
+  .ticket-strip{
+    display:flex; justify-content:space-between; background:var(--ink); color:var(--paper); border-radius:4px; padding:16px 18px; margin-bottom:20px;
+  }
+  .ticket-strip .t-block .label{font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#9FB3BC; margin-bottom:4px;}
+  .ticket-strip .t-block .val{font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600;}
+  .ticket-strip .t-block.bal .val{color:#F0C36D;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  textarea, .field input[type=text], .field input[type=number], .field input[type=date]{font-family:'Inter',sans-serif;}
+  textarea{width:100%; border:1px solid var(--line-strong); border-radius:3px; padding:10px 12px; font-size:13.5px; font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
+
+  .hist-list{list-style:none; margin:0; padding:0;}
+  .hist-list li{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px dashed var(--line);}
+  .hist-list li:last-child{border-bottom:none;}
+  .hist-list .hd{font-size:12.5px; color:var(--text-dim);}
+  .hist-list .ha{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--forest);}
+  .hist-empty{color:var(--text-dim); font-size:13px; padding:8px 0;}
+
+  .add-payment-row{display:flex; gap:8px; margin-top:14px;}
+  .add-payment-row input{flex:1; padding:9px 10px; border:1px solid var(--line-strong); border-radius:3px; font-size:13.5px;}
+
+  .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:18px 0 8px; font-weight:600;}
+  .section-label:first-child{margin-top:0;}
+
+  @media(max-width:760px){
+    .cards{grid-template-columns:repeat(2,1fr);}
+    header.top{padding:18px 18px;}
+    main{padding:20px 14px 50px;}
+    .grid2{grid-template-columns:1fr;}
+    table.ledger{font-size:12.5px;}
+    .remark-cell{display:none;}
+    table.ledger thead th:nth-child(6){display:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>Ledger</h1>
+    <p>Accounts Receivable — staff access</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="user">Username</label>
+        <input type="text" id="user" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="pass">Password</label>
+        <input type="password" id="pass" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn full">Sign in</button>
+      <div id="loginError">Incorrect username or password.</div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Ledger</h1>
+      <span class="tag">Accounts Receivable</span>
+    </div>
+    <div class="actions">
+      <span class="conn"><span class="status-dot" id="connDot"></span><span id="connText">Synced</span></span>
+      <button class="btn secondary" id="exportBtn">Export CSV</button>
+      <button class="btn" id="newRecordBtn">+ New Entry</button>
+      <button class="btn secondary" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="cards">
+      <div class="card total" data-mark="Σ">
+        <div class="label">Total Ticketed</div>
+        <div class="value mono" id="cardTotal">₱0.00</div>
+        <div class="sub" id="cardTotalSub">0 records</div>
+      </div>
+      <div class="card collected" data-mark="✓">
+        <div class="label">Total Collected</div>
+        <div class="value mono" id="cardCollected">₱0.00</div>
+        <div class="sub" id="cardCollectedSub">0% of ticketed</div>
+      </div>
+      <div class="card outstanding" data-mark="◷">
+        <div class="label">Outstanding Balance</div>
+        <div class="value mono" id="cardOutstanding">₱0.00</div>
+        <div class="sub" id="cardOutstandingSub">across 0 accounts</div>
+      </div>
+      <div class="card overdue" data-mark="!">
+        <div class="label">60+ Days Overdue</div>
+        <div class="value mono" id="cardOverdue">₱0.00</div>
+        <div class="aging-strip">
+          <span id="ageBar0" style="background:var(--forest);"></span>
+          <span id="ageBar1" style="background:var(--amber);"></span>
+          <span id="ageBar2" style="background:var(--rust);"></span>
+        </div>
+        <div class="sub">Current · 30–60d · 60d+</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="left">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by name or record no.">
+        </div>
+        <select class="filter" id="statusFilter">
+          <option value="all">All statuses</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+        </select>
+        <select class="filter" id="agingFilter">
+          <option value="all">All ages</option>
+          <option value="current">Current (0–30d)</option>
+          <option value="warn">31–60d</option>
+          <option value="crit">60d+</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="ledger-wrap">
+      <table class="ledger" id="ledgerTable">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Date</th>
+            <th>Name</th>
+            <th style="text-align:right">Ticket Amount</th>
+            <th style="text-align:right">Balance</th>
+            <th>Remark</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <h3>No records yet</h3>
+        <p>Click "+ New Entry" to log the first receivable.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ================= NEW ENTRY MODAL ================= -->
+<div class="overlay" id="newOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>New Receivable</h2>
+        <div class="rn">Record no. assigned automatically</div>
+      </div>
+      <button class="modal-close" data-close="newOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="newForm">
+        <div class="grid2">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="f_date" required>
+          </div>
+          <div class="field">
+            <label>Ticket Amount</label>
+            <input type="number" id="f_amount" step="0.01" min="0" placeholder="0.00" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Customer Name</label>
+          <input type="text" id="f_name" placeholder="Full name" required>
+        </div>
+        <div class="field">
+          <label>Remark</label>
+          <textarea id="f_remark" placeholder="Optional note"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="newOverlay">Cancel</button>
+      <button class="btn" id="saveNewBtn">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RECORD DETAIL MODAL ================= -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="d_name">—</h2>
+        <div class="rn" id="d_recordNo">—</div>
+      </div>
+      <button class="modal-close" data-close="detailOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="ticket-strip">
+        <div class="t-block">
+          <div class="label">Ticket Amount</div>
+          <div class="val mono" id="d_ticket">₱0.00</div>
+        </div>
+        <div class="t-block">
+          <div class="label">Paid to Date</div>
+          <div class="val mono" id="d_paid">₱0.00</div>
+        </div>
+        <div class="t-block bal">
+          <div class="label">Balance</div>
+          <div class="val mono" id="d_balance">₱0.00</div>
+        </div>
+      </div>
+
+      <div class="section-label">Payment History</div>
+      <ul class="hist-list" id="d_history"></ul>
+      <div class="add-payment-row">
+        <input type="date" id="p_date">
+        <input type="number" id="p_amount" step="0.01" min="0" placeholder="Amount">
+        <input type="text" id="p_note" placeholder="Note (optional)">
+        <button class="btn" id="addPaymentBtn">Add</button>
+      </div>
+
+      <div class="section-label">Remark</div>
+      <textarea id="d_remark"></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="deleteBtn">Delete Record</button>
+      <button class="btn" id="saveDetailBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@neondatabase/neon-js/+esm";
+
+/* ============================================================
+   CONFIG — copy these from the Neon Console:
+   - NEON_DATA_API_URL: Data API page → "API URL"
+   - NEON_AUTH_URL:      Auth page → "Auth URL"
+   ============================================================ */
+const NEON_DATA_API_URL = "https://ep-wispy-sound-atot4lsj.apirest.c-9.us-east-1.aws.neon.tech/neondb/rest/v1";
+const NEON_AUTH_URL = "https://ep-wispy-sound-atot4lsj.neonauth.c-9.us-east-1.aws.neon.tech/neondb/auth";
+
+/* Shared front-desk login (matches the JN Business pattern) — change these */
+const STAFF_USER = "Deilen75";
+const STAFF_PASS = "12345AIR";
+
+/* ============================================================ */
+
+const supabase = createClient({
+  auth: { url: NEON_AUTH_URL, allowAnonymous: true },
+  dataApi: { url: NEON_DATA_API_URL }
+});
+/* Kept the variable name "supabase" above on purpose — the rest of this
+   file calls supabase.from(...) exactly like before, since neon-js
+   mirrors the same .from().select()/.insert()/.update()/.delete() API. */
+
+let records = [];
+let currentDetailId = null;
+
+/* ---------- Auth gate ---------- */
+const loginScreen = document.getElementById('loginScreen');
+const appEl = document.getElementById('app');
+
+function checkSession(){
+  if(sessionStorage.getItem('ar_logged_in') === 'true'){
+    loginScreen.style.display = 'none';
+    appEl.style.display = 'block';
+    init();
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const u = document.getElementById('user').value.trim();
+  const p = document.getElementById('pass').value;
+  if(u === STAFF_USER && p === STAFF_PASS){
+    sessionStorage.setItem('ar_logged_in', 'true');
+    document.getElementById('loginError').style.display = 'none';
+    checkSession();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  sessionStorage.removeItem('ar_logged_in');
+  location.reload();
+});
+
+/* ---------- Helpers ---------- */
+function peso(n){
+  n = Number(n) || 0;
+  return '₱' + n.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function daysSince(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  return Math.floor((now - d) / (1000*60*60*24));
+}
+function agingBucket(rec){
+  if(rec.status === 'paid') return 'paid';
+  const days = daysSince(rec.entry_date);
+  if(days > 60) return 'crit';
+  if(days > 30) return 'warn';
+  return 'current';
+}
+function agingLabel(bucket){
+  if(bucket === 'crit') return '60d+';
+  if(bucket === 'warn') return '31–60d';
+  if(bucket === 'current') return 'current';
+  return '';
+}
+
+/* ---------- Data load + realtime ---------- */
+async function loadRecords(){
+  const { data, error } = await supabase
+    .from('ar_records')
+    .select('*')
+    .order('entry_date', {ascending:false});
+  if(error){
+    console.error(error);
+    document.getElementById('connText').textContent = 'Connection error';
+    document.getElementById('connDot').style.background = '#A23E2E';
+    return;
+  }
+  records = data || [];
+  renderAll();
+}
+
+function subscribeRealtime(){
+  /* Neon's Data API has no live/realtime channel like Supabase, so this
+     polls for changes every 8 seconds instead. Feels "live enough" for a
+     handful of staff on the same shared login — just not instant. */
+  setInterval(loadRecords, 8000);
+}
+
+/* ---------- Rendering ---------- */
+function renderAll(){
+  renderCards();
+  renderTable();
+}
+
+function renderCards(){
+  const total = records.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+  const collected = records.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
+  const outstanding = records.reduce((s,r)=>s + Number(r.balance||0), 0);
+  const overdueRecs = records.filter(r=> r.balance > 0 && agingBucket(r) === 'crit');
+  const overdueTotal = overdueRecs.reduce((s,r)=>s + Number(r.balance||0), 0);
+
+  document.getElementById('cardTotal').textContent = peso(total);
+  document.getElementById('cardTotalSub').textContent = `${records.length} record${records.length===1?'':'s'}`;
+
+  document.getElementById('cardCollected').textContent = peso(collected);
+  const pct = total > 0 ? Math.round((collected/total)*100) : 0;
+  document.getElementById('cardCollectedSub').textContent = `${pct}% of ticketed`;
+
+  document.getElementById('cardOutstanding').textContent = peso(outstanding);
+  const openAccounts = records.filter(r=>r.balance > 0).length;
+  document.getElementById('cardOutstandingSub').textContent = `across ${openAccounts} account${openAccounts===1?'':'s'}`;
+
+  document.getElementById('cardOverdue').textContent = peso(overdueTotal);
+
+  const openRecs = records.filter(r=>r.balance > 0);
+  const cCurrent = openRecs.filter(r=>agingBucket(r)==='current').length;
+  const cWarn = openRecs.filter(r=>agingBucket(r)==='warn').length;
+  const cCrit = openRecs.filter(r=>agingBucket(r)==='crit').length;
+  const totalOpen = Math.max(cCurrent+cWarn+cCrit, 1);
+  document.getElementById('ageBar0').style.flex = cCurrent||0.001;
+  document.getElementById('ageBar1').style.flex = cWarn||0.001;
+  document.getElementById('ageBar2').style.flex = cCrit||0.001;
+}
+
+function renderTable(){
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  const statusF = document.getElementById('statusFilter').value;
+  const agingF = document.getElementById('agingFilter').value;
+
+  let rows = records.filter(r=>{
+    if(search && !(r.customer_name.toLowerCase().includes(search) || r.record_no.toLowerCase().includes(search))) return false;
+    if(statusF !== 'all' && r.status !== statusF) return false;
+    if(agingF !== 'all'){
+      if(r.balance <= 0) return false;
+      if(agingBucket(r) !== agingF) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('ledgerBody');
+  const empty = document.getElementById('emptyState');
+  tbody.innerHTML = '';
+
+  if(rows.length === 0){
+    empty.style.display = 'block';
+    document.getElementById('ledgerTable').style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  document.getElementById('ledgerTable').style.display = 'table';
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.addEventListener('click', ()=>openDetail(r.id));
+    const bucket = agingBucket(r);
+    const agingHtml = (r.balance > 0 && bucket !== 'current')
+      ? `<span class="aging-tag ${bucket==='crit'?'crit':'warn'}">${agingLabel(bucket)}</span>`
+      : '';
+    tr.innerHTML = `
+      <td>${r.record_no}</td>
+      <td>${r.entry_date}</td>
+      <td class="name">${escapeHtml(r.customer_name)}</td>
+      <td class="amt">${peso(r.ticket_amount)}</td>
+      <td class="amt">${peso(r.balance)}</td>
+      <td class="remark-cell">${escapeHtml(r.remark || '—')}</td>
+      <td><span class="pill ${r.status}">${r.status}</span>${agingHtml}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('statusFilter').addEventListener('change', renderTable);
+document.getElementById('agingFilter').addEventListener('change', renderTable);
+
+/* ---------- New entry modal ---------- */
+const newOverlay = document.getElementById('newOverlay');
+document.getElementById('newRecordBtn').addEventListener('click', ()=>{
+  document.getElementById('newForm').reset();
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  newOverlay.classList.add('show');
+});
+
+document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
+  const date = document.getElementById('f_date').value;
+  const amount = parseFloat(document.getElementById('f_amount').value);
+  const name = document.getElementById('f_name').value.trim();
+  const remark = document.getElementById('f_remark').value.trim();
+
+  if(!date || !name || isNaN(amount) || amount < 0){
+    alert('Please fill in date, name, and a valid ticket amount.');
+    return;
+  }
+
+  const { error } = await supabase.from('ar_records').insert({
+    entry_date: date,
+    customer_name: name,
+    ticket_amount: amount,
+    remark: remark,
+    payment_history: []
+  });
+
+  if(error){
+    alert('Could not save: ' + error.message);
+    return;
+  }
+  newOverlay.classList.remove('show');
+  loadRecords();
+});
+
+/* ---------- Detail modal ---------- */
+const detailOverlay = document.getElementById('detailOverlay');
+
+function openDetail(id){
+  const r = records.find(x=>x.id === id);
+  if(!r) return;
+  currentDetailId = id;
+  document.getElementById('d_name').textContent = r.customer_name;
+  document.getElementById('d_recordNo').textContent = `${r.record_no} · ${r.entry_date}`;
+  document.getElementById('d_ticket').textContent = peso(r.ticket_amount);
+  document.getElementById('d_paid').textContent = peso(r.amount_paid);
+  document.getElementById('d_balance').textContent = peso(r.balance);
+  document.getElementById('d_remark').value = r.remark || '';
+
+  const histEl = document.getElementById('d_history');
+  histEl.innerHTML = '';
+  const hist = r.payment_history || [];
+  if(hist.length === 0){
+    histEl.innerHTML = '<div class="hist-empty">No payments recorded yet.</div>';
+  } else {
+    hist.slice().reverse().forEach(p=>{
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="hd">${p.date}${p.note ? ' — ' + escapeHtml(p.note) : ''}</span><span class="ha">+ ${peso(p.amount)}</span>`;
+      histEl.appendChild(li);
+    });
+  }
+
+  document.getElementById('p_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('p_amount').value = '';
+  document.getElementById('p_note').value = '';
+
+  detailOverlay.classList.add('show');
+}
+
+document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
+  const date = document.getElementById('p_date').value;
+  const amount = parseFloat(document.getElementById('p_amount').value);
+  const note = document.getElementById('p_note').value.trim();
+
+  if(!date || isNaN(amount) || amount <= 0){
+    alert('Enter a valid payment date and amount.');
+    return;
+  }
+
+  const newHistory = [...(r.payment_history || []), {date, amount, note}];
+  const { error } = await supabase
+    .from('ar_records')
+    .update({ payment_history: newHistory })
+    .eq('id', r.id);
+
+  if(error){
+    alert('Could not add payment: ' + error.message);
+    return;
+  }
+  await loadRecords();
+  openDetail(currentDetailId);
+});
+
+document.getElementById('saveDetailBtn').addEventListener('click', async ()=>{
+  const remark = document.getElementById('d_remark').value;
+  const { error } = await supabase
+    .from('ar_records')
+    .update({ remark })
+    .eq('id', currentDetailId);
+  if(error){
+    alert('Could not save: ' + error.message);
+    return;
+  }
+  detailOverlay.classList.remove('show');
+  loadRecords();
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+  if(!confirm('Delete this record permanently? This cannot be undone.')) return;
+  const { error } = await supabase.from('ar_records').delete().eq('id', currentDetailId);
+  if(error){
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  detailOverlay.classList.remove('show');
+  loadRecords();
+});
+
+/* ---------- Modal close handlers ---------- */
+document.querySelectorAll('[data-close]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.getElementById(btn.getAttribute('data-close')).classList.remove('show');
+  });
+});
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click', (e)=>{
+    if(e.target === ov) ov.classList.remove('show');
+  });
+});
+
+/* ---------- CSV export ---------- */
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const headers = ['Record No','Date','Customer Name','Ticket Amount','Amount Paid','Balance','Status','Remark'];
+  const rows = records.map(r=>[
+    r.record_no, r.entry_date, r.customer_name, r.ticket_amount, r.amount_paid, r.balance, r.status,
+    (r.remark||'').replace(/"/g,'""')
+  ]);
+  let csv = headers.join(',') + '\n';
+  rows.forEach(row=>{
+    csv += row.map(v=> typeof v === 'string' && (v.includes(',')||v.includes('"')) ? `"${v}"` : v).join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `accounts_receivable_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ---------- Init ---------- */
+function init(){
+  loadRecords();
+  subscribeRealtime();
+}
+
+checkSession();
+</script>
+</body>
+</html>
