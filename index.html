@@ -93,6 +93,15 @@
   .aging-strip{display:flex; gap:1px; margin-top:12px; border-radius:3px; overflow:hidden; height:8px;}
   .aging-strip span{flex:1; background:var(--line);}
 
+  .card.profit{padding-bottom:14px;}
+  .profit-rows{margin-top:6px;}
+  .profit-rows .p-row{display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px dashed var(--line); font-size:13px;}
+  .profit-rows .p-row:last-child{border-bottom:none;}
+  .profit-rows .p-row span:first-child{color:var(--text-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+  .profit-rows .p-row span:last-child{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15px;}
+  .profit-rows .p-row.income span:last-child{color:var(--forest); font-size:17px;}
+  .profit-rows .p-row.income.negative span:last-child{color:var(--rust);}
+
   /* ---------- Toolbar ---------- */
   .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:14px; flex-wrap:wrap;}
   .toolbar .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
@@ -146,10 +155,11 @@
   .modal-foot{padding:16px 26px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px;}
 
   .ticket-strip{
-    display:flex; justify-content:space-between; background:var(--ink); color:var(--paper); border-radius:4px; padding:16px 18px; margin-bottom:20px;
+    display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; background:var(--ink); color:var(--paper); border-radius:4px; padding:16px 18px; margin-bottom:20px;
   }
+  .ticket-strip .t-block{flex:1; min-width:100px;}
   .ticket-strip .t-block .label{font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#9FB3BC; margin-bottom:4px;}
-  .ticket-strip .t-block .val{font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600;}
+  .ticket-strip .t-block .val{font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600;}
   .ticket-strip .t-block.bal .val{color:#F0C36D;}
 
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -251,15 +261,13 @@
         <div class="value mono" id="cardOutstanding">₱0.00</div>
         <div class="sub" id="cardOutstandingSub">across 0 accounts</div>
       </div>
-      <div class="card overdue" data-mark="!">
-        <div class="label">60+ Days Overdue</div>
-        <div class="value mono" id="cardOverdue">₱0.00</div>
-        <div class="aging-strip">
-          <span id="ageBar0" style="background:var(--forest);"></span>
-          <span id="ageBar1" style="background:var(--amber);"></span>
-          <span id="ageBar2" style="background:var(--rust);"></span>
+      <div class="card profit" data-mark="₱">
+        <div class="label">Capital · Sales · Income</div>
+        <div class="profit-rows">
+          <div class="p-row"><span>Capital</span><span class="mono" id="cardCapital">₱0.00</span></div>
+          <div class="p-row"><span>Sales</span><span class="mono" id="cardSales">₱0.00</span></div>
+          <div class="p-row income"><span>Income</span><span class="mono" id="cardIncome">₱0.00</span></div>
         </div>
-        <div class="sub">Current · 30–60d · 60d+</div>
       </div>
     </div>
 
@@ -326,6 +334,10 @@
           </div>
         </div>
         <div class="field">
+          <label>Capital</label>
+          <input type="number" id="f_capital" step="0.01" min="0" placeholder="0.00 (cost tied to this ticket)">
+        </div>
+        <div class="field">
           <label>Customer Name</label>
           <input type="text" id="f_name" placeholder="Full name" required>
         </div>
@@ -354,6 +366,10 @@
     </div>
     <div class="modal-body">
       <div class="ticket-strip">
+        <div class="t-block">
+          <div class="label">Capital</div>
+          <div class="val mono" id="d_capital">₱0.00</div>
+        </div>
         <div class="t-block">
           <div class="label">Ticket Amount</div>
           <div class="val mono" id="d_ticket">₱0.00</div>
@@ -546,8 +562,8 @@ function renderCards(){
   const total = records.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
   const collected = records.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
   const outstanding = records.reduce((s,r)=>s + Number(r.balance||0), 0);
-  const overdueRecs = records.filter(r=> r.balance > 0 && agingBucket(r) === 'crit');
-  const overdueTotal = overdueRecs.reduce((s,r)=>s + Number(r.balance||0), 0);
+  const totalCapital = records.reduce((s,r)=>s + Number(r.capital||0), 0);
+  const income = total - totalCapital;
 
   document.getElementById('cardTotal').textContent = peso(total);
   document.getElementById('cardTotalSub').textContent = `${records.length} record${records.length===1?'':'s'}`;
@@ -560,16 +576,11 @@ function renderCards(){
   const openAccounts = records.filter(r=>r.balance > 0).length;
   document.getElementById('cardOutstandingSub').textContent = `across ${openAccounts} account${openAccounts===1?'':'s'}`;
 
-  document.getElementById('cardOverdue').textContent = peso(overdueTotal);
-
-  const openRecs = records.filter(r=>r.balance > 0);
-  const cCurrent = openRecs.filter(r=>agingBucket(r)==='current').length;
-  const cWarn = openRecs.filter(r=>agingBucket(r)==='warn').length;
-  const cCrit = openRecs.filter(r=>agingBucket(r)==='crit').length;
-  const totalOpen = Math.max(cCurrent+cWarn+cCrit, 1);
-  document.getElementById('ageBar0').style.flex = cCurrent||0.001;
-  document.getElementById('ageBar1').style.flex = cWarn||0.001;
-  document.getElementById('ageBar2').style.flex = cCrit||0.001;
+  document.getElementById('cardCapital').textContent = peso(totalCapital);
+  document.getElementById('cardSales').textContent = peso(total);
+  const incomeEl = document.getElementById('cardIncome');
+  incomeEl.textContent = (income < 0 ? '−' : '') + peso(Math.abs(income));
+  incomeEl.closest('.p-row').classList.toggle('negative', income < 0);
 }
 
 function renderTable(){
@@ -631,17 +642,20 @@ const newOverlay = document.getElementById('newOverlay');
 document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('f_capital').value = '';
   newOverlay.classList.add('show');
 });
 
 document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('f_date').value;
   const amount = parseFloat(document.getElementById('f_amount').value);
+  const capitalRaw = document.getElementById('f_capital').value;
+  const capital = capitalRaw === '' ? 0 : parseFloat(capitalRaw);
   const name = document.getElementById('f_name').value.trim();
   const remark = document.getElementById('f_remark').value.trim();
 
-  if(!date || !name || isNaN(amount) || amount < 0){
-    alert('Please fill in date, name, and a valid ticket amount.');
+  if(!date || !name || isNaN(amount) || amount < 0 || isNaN(capital) || capital < 0){
+    alert('Please fill in date, name, and valid ticket amount / capital.');
     return;
   }
 
@@ -649,6 +663,7 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     entry_date: date,
     customer_name: name,
     ticket_amount: amount,
+    capital: capital,
     remark: remark,
     payment_history: []
   });
@@ -670,6 +685,7 @@ function openDetail(id){
   currentDetailId = id;
   document.getElementById('d_name').textContent = r.customer_name;
   document.getElementById('d_recordNo').textContent = `${r.record_no} · ${r.entry_date}`;
+  document.getElementById('d_capital').textContent = peso(r.capital);
   document.getElementById('d_ticket').textContent = peso(r.ticket_amount);
   document.getElementById('d_paid').textContent = peso(r.amount_paid);
   document.getElementById('d_balance').textContent = peso(r.balance);
@@ -791,9 +807,9 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- CSV export ---------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
-  const headers = ['Record No','Date','Customer Name','Ticket Amount','Amount Paid','Balance','Status','Remark'];
+  const headers = ['Record No','Date','Customer Name','Capital','Ticket Amount','Amount Paid','Balance','Status','Remark'];
   const rows = records.map(r=>[
-    r.record_no, r.entry_date, r.customer_name, r.ticket_amount, r.amount_paid, r.balance, r.status,
+    r.record_no, r.entry_date, r.customer_name, r.capital, r.ticket_amount, r.amount_paid, r.balance, r.status,
     (r.remark||'').replace(/"/g,'""')
   ]);
   let csv = headers.join(',') + '\n';
