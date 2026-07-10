@@ -191,6 +191,7 @@
     #printStatement table{width:100%; border-collapse:collapse; margin-top:16px;}
     #printStatement td, #printStatement th{padding:6px 4px; font-size:13px;}
     #printStatement .totals td{border-top:1px solid #333;}
+    #printStatement tfoot td{border-top:1px solid #333; padding-top:8px;}
   }
 
   .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:18px 0 8px; font-weight:600;}
@@ -773,30 +774,68 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
 });
 
 document.getElementById('printBtn').addEventListener('click', ()=>{
-  const r = records.find(x=>x.id === currentDetailId);
-  if(!r) return;
-  const hist = r.payment_history || [];
-  const rows = hist.length
-    ? hist.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="2">No payments recorded.</td></tr>';
+  const current = records.find(x=>x.id === currentDetailId);
+  if(!current) return;
+
+  // Pull in every ticket that belongs to this same customer, not just the one open
+  const custRecords = records
+    .filter(r => r.customer_name === current.customer_name)
+    .sort((a,b)=> a.entry_date.localeCompare(b.entry_date));
+
+  const totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+  const totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
+  const totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
+
+  const ticketRows = custRecords.map(r=>`
+    <tr>
+      <td>${r.record_no}</td>
+      <td>${r.entry_date}</td>
+      <td style="text-align:right">${peso(r.ticket_amount)}</td>
+      <td style="text-align:right">${peso(r.amount_paid)}</td>
+      <td style="text-align:right">${peso(r.balance)}</td>
+    </tr>`).join('');
+
+  // Combined payment history across all of this customer's tickets, tagged by record no.
+  const allPayments = [];
+  custRecords.forEach(r=>{
+    (r.payment_history || []).forEach(p=> allPayments.push({...p, record_no:r.record_no}));
+  });
+  allPayments.sort((a,b)=> a.date.localeCompare(b.date));
+  const paymentRows = allPayments.length
+    ? allPayments.map(p=>`<tr><td>${p.date}</td><td>${p.record_no}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
+    : '<tr><td colspan="3">No payments recorded.</td></tr>';
 
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
     <p style="margin:0 0 18px; font-size:12.5px; color:#555;">Statement of Account</p>
-    <p>Record No: <strong>${r.record_no}</strong><br>
-       Date: ${r.entry_date}<br>
-       Customer: <strong>${escapeHtml(r.customer_name)}</strong></p>
+    <p>Customer: <strong>${escapeHtml(current.customer_name)}</strong></p>
+
+    <h3 style="margin-top:18px; font-size:15px;">Tickets</h3>
     <table>
-      <tr><td>Ticket Amount</td><td style="text-align:right">${peso(r.ticket_amount)}</td></tr>
-      <tr><td>Paid to Date</td><td style="text-align:right">${peso(r.amount_paid)}</td></tr>
-      <tr class="totals"><td><strong>Balance</strong></td><td style="text-align:right"><strong>${peso(r.balance)}</strong></td></tr>
+      <thead><tr>
+        <th style="text-align:left">Record No</th>
+        <th style="text-align:left">Date</th>
+        <th style="text-align:right">Ticket Amount</th>
+        <th style="text-align:right">Paid</th>
+        <th style="text-align:right">Balance</th>
+      </tr></thead>
+      <tbody>${ticketRows}</tbody>
+      <tfoot>
+        <tr class="totals">
+          <td colspan="2"><strong>Total</strong></td>
+          <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
+          <td style="text-align:right"><strong>${peso(totalPaid)}</strong></td>
+          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
+        </tr>
+      </tfoot>
     </table>
+
     <h3 style="margin-top:22px; font-size:15px;">Payment History</h3>
     <table>
-      <thead><tr><th style="text-align:left">Date</th><th style="text-align:right">Amount</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Record No</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${paymentRows}</tbody>
     </table>
-    <p style="margin-top:26px; font-size:12px; color:#555;">Remark: ${escapeHtml(r.remark || '—')}</p>
+
     <p style="margin-top:30px; font-size:11px; color:#888;">Printed ${new Date().toLocaleDateString()}</p>
   `;
   window.print();
