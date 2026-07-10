@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AIR - Ticket Amount</title>
+<title>Ledger — Accounts Receivable</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
@@ -166,6 +166,23 @@
   .add-payment-row{display:flex; gap:8px; margin-top:14px;}
   .add-payment-row input{flex:1; padding:9px 10px; border:1px solid var(--line-strong); border-radius:3px; font-size:13.5px;}
 
+  /* ---------- Pie chart / progress ---------- */
+  .progress-row{display:flex; align-items:center; gap:14px; margin-bottom:20px;}
+  .progress-text .pct{font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600;}
+  .progress-text .lbl{font-size:11.5px; color:var(--text-dim);}
+  .row-pie{display:inline-flex; vertical-align:middle; margin-left:6px;}
+
+  /* ---------- Print-only statement ---------- */
+  .print-only{display:none;}
+  @media print{
+    body > *:not(#printStatement){display:none !important;}
+    #printStatement{display:block !important; padding:36px; font-family:'Inter',sans-serif; color:#111;}
+    #printStatement h1{font-family:'Fraunces',serif; font-size:22px; margin-bottom:2px;}
+    #printStatement table{width:100%; border-collapse:collapse; margin-top:16px;}
+    #printStatement td, #printStatement th{padding:6px 4px; font-size:13px;}
+    #printStatement .totals td{border-top:1px solid #333;}
+  }
+
   .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:18px 0 8px; font-weight:600;}
   .section-label:first-child{margin-top:0;}
 
@@ -257,11 +274,8 @@
           <option value="partial">Partial</option>
           <option value="paid">Paid</option>
         </select>
-        <select class="filter" id="agingFilter">
-          <option value="all">All ages</option>
-          <option value="current">Current (0–30d)</option>
-          <option value="warn">31–60d</option>
-          <option value="crit">60d+</option>
+        <select class="filter" id="monthFilter">
+          <option value="all">All months</option>
         </select>
       </div>
     </div>
@@ -354,12 +368,19 @@
         </div>
       </div>
 
+      <div class="progress-row">
+        <div id="d_pie"></div>
+        <div class="progress-text">
+          <div class="pct" id="d_pct">0%</div>
+          <div class="lbl">of ticket paid</div>
+        </div>
+      </div>
+
       <div class="section-label">Payment History</div>
       <ul class="hist-list" id="d_history"></ul>
       <div class="add-payment-row">
         <input type="date" id="p_date">
         <input type="number" id="p_amount" step="0.01" min="0" placeholder="Amount">
-        <input type="text" id="p_note" placeholder="Note (optional)">
         <button class="btn" id="addPaymentBtn">Add</button>
       </div>
 
@@ -368,10 +389,13 @@
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
+      <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
   </div>
 </div>
+
+<div id="printStatement" class="print-only"></div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@neondatabase/neon-js/+esm";
@@ -454,6 +478,39 @@ function agingLabel(bucket){
   if(bucket === 'current') return 'current';
   return '';
 }
+function paidPct(r){
+  if(Number(r.ticket_amount) <= 0) return r.balance <= 0 ? 1 : 0;
+  return Math.min(Math.max(Number(r.amount_paid) / Number(r.ticket_amount), 0), 1);
+}
+function pieSvg(pct, size){
+  const r = (size/2) - (size*0.14);
+  const c = 2 * Math.PI * r;
+  const paidLen = c * pct;
+  const color = pct >= 1 ? 'var(--forest)' : (pct > 0 ? 'var(--amber)' : 'var(--rust)');
+  const sw = Math.max(size*0.16, 3);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${sw}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+      stroke-linecap="round" stroke-dasharray="${paidLen} ${c-paidLen}"
+      transform="rotate(-90 ${size/2} ${size/2})"/>
+  </svg>`;
+}
+function monthKey(dateStr){
+  return dateStr.slice(0,7); // "YYYY-MM"
+}
+function monthLabel(key){
+  const [y,m] = key.split('-');
+  const d = new Date(Number(y), Number(m)-1, 1);
+  return d.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+}
+function populateMonthFilter(){
+  const sel = document.getElementById('monthFilter');
+  const prev = sel.value;
+  const keys = [...new Set(records.map(r=>monthKey(r.entry_date)))].sort().reverse();
+  sel.innerHTML = '<option value="all">All months</option>' +
+    keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
+  if(keys.includes(prev)) sel.value = prev;
+}
 
 /* ---------- Data load + realtime ---------- */
 async function loadRecords(){
@@ -468,6 +525,7 @@ async function loadRecords(){
     return;
   }
   records = data || [];
+  populateMonthFilter();
   renderAll();
 }
 
@@ -517,15 +575,12 @@ function renderCards(){
 function renderTable(){
   const search = document.getElementById('searchInput').value.trim().toLowerCase();
   const statusF = document.getElementById('statusFilter').value;
-  const agingF = document.getElementById('agingFilter').value;
+  const monthF = document.getElementById('monthFilter').value;
 
   let rows = records.filter(r=>{
     if(search && !(r.customer_name.toLowerCase().includes(search) || r.record_no.toLowerCase().includes(search))) return false;
     if(statusF !== 'all' && r.status !== statusF) return false;
-    if(agingF !== 'all'){
-      if(r.balance <= 0) return false;
-      if(agingBucket(r) !== agingF) return false;
-    }
+    if(monthF !== 'all' && monthKey(r.entry_date) !== monthF) return false;
     return true;
   });
 
@@ -555,7 +610,7 @@ function renderTable(){
       <td class="amt">${peso(r.ticket_amount)}</td>
       <td class="amt">${peso(r.balance)}</td>
       <td class="remark-cell">${escapeHtml(r.remark || '—')}</td>
-      <td><span class="pill ${r.status}">${r.status}</span>${agingHtml}</td>
+      <td><span class="pill ${r.status}">${r.status}</span>${agingHtml}<span class="row-pie">${pieSvg(paidPct(r), 20)}</span></td>
     `;
     tbody.appendChild(tr);
   });
@@ -569,7 +624,7 @@ function escapeHtml(s){
 
 document.getElementById('searchInput').addEventListener('input', renderTable);
 document.getElementById('statusFilter').addEventListener('change', renderTable);
-document.getElementById('agingFilter').addEventListener('change', renderTable);
+document.getElementById('monthFilter').addEventListener('change', renderTable);
 
 /* ---------- New entry modal ---------- */
 const newOverlay = document.getElementById('newOverlay');
@@ -620,6 +675,10 @@ function openDetail(id){
   document.getElementById('d_balance').textContent = peso(r.balance);
   document.getElementById('d_remark').value = r.remark || '';
 
+  const pct = paidPct(r);
+  document.getElementById('d_pie').innerHTML = pieSvg(pct, 56);
+  document.getElementById('d_pct').textContent = `${Math.round(pct*100)}%`;
+
   const histEl = document.getElementById('d_history');
   histEl.innerHTML = '';
   const hist = r.payment_history || [];
@@ -628,14 +687,13 @@ function openDetail(id){
   } else {
     hist.slice().reverse().forEach(p=>{
       const li = document.createElement('li');
-      li.innerHTML = `<span class="hd">${p.date}${p.note ? ' — ' + escapeHtml(p.note) : ''}</span><span class="ha">+ ${peso(p.amount)}</span>`;
+      li.innerHTML = `<span class="hd">${p.date}</span><span class="ha">+ ${peso(p.amount)}</span>`;
       histEl.appendChild(li);
     });
   }
 
   document.getElementById('p_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('p_amount').value = '';
-  document.getElementById('p_note').value = '';
 
   detailOverlay.classList.add('show');
 }
@@ -645,14 +703,13 @@ document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
   if(!r) return;
   const date = document.getElementById('p_date').value;
   const amount = parseFloat(document.getElementById('p_amount').value);
-  const note = document.getElementById('p_note').value.trim();
 
   if(!date || isNaN(amount) || amount <= 0){
     alert('Enter a valid payment date and amount.');
     return;
   }
 
-  const newHistory = [...(r.payment_history || []), {date, amount, note}];
+  const newHistory = [...(r.payment_history || []), {date, amount}];
   const { error } = await supabase
     .from('ar_records')
     .update({ payment_history: newHistory })
@@ -664,6 +721,35 @@ document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
   }
   await loadRecords();
   openDetail(currentDetailId);
+});
+
+document.getElementById('printBtn').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
+  const hist = r.payment_history || [];
+  const rows = hist.length
+    ? hist.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
+    : '<tr><td colspan="2">No payments recorded.</td></tr>';
+
+  document.getElementById('printStatement').innerHTML = `
+    <h1>Ledger — Statement of Account</h1>
+    <p>Record No: <strong>${r.record_no}</strong><br>
+       Date: ${r.entry_date}<br>
+       Customer: <strong>${escapeHtml(r.customer_name)}</strong></p>
+    <table>
+      <tr><td>Ticket Amount</td><td style="text-align:right">${peso(r.ticket_amount)}</td></tr>
+      <tr><td>Paid to Date</td><td style="text-align:right">${peso(r.amount_paid)}</td></tr>
+      <tr class="totals"><td><strong>Balance</strong></td><td style="text-align:right"><strong>${peso(r.balance)}</strong></td></tr>
+    </table>
+    <h3 style="margin-top:22px; font-size:15px;">Payment History</h3>
+    <table>
+      <thead><tr><th style="text-align:left">Date</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin-top:26px; font-size:12px; color:#555;">Remark: ${escapeHtml(r.remark || '—')}</p>
+    <p style="margin-top:30px; font-size:11px; color:#888;">Printed ${new Date().toLocaleDateString()}</p>
+  `;
+  window.print();
 });
 
 document.getElementById('saveDetailBtn').addEventListener('click', async ()=>{
