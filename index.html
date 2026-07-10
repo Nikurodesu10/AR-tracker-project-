@@ -853,8 +853,16 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
       <tbody>${ticketRows}</tbody>
       <tfoot>
         <tr class="totals">
-          <td><strong>Total Sales</strong></td>
+          <td><strong>Total Ticket Amount</strong></td>
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
+        </tr>
+        <tr>
+          <td>Paid to Date</td>
+          <td style="text-align:right">${peso(totalPaid)}</td>
+        </tr>
+        <tr class="totals">
+          <td><strong>Balance</strong></td>
+          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
       </tfoot>
     </table>
