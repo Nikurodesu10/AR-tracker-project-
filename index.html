@@ -339,7 +339,8 @@
         </div>
         <div class="field">
           <label>Customer Name</label>
-          <input type="text" id="f_name" placeholder="Full name" required>
+          <input type="text" id="f_name" placeholder="Full name" list="customerNamesList" autocomplete="off" required>
+          <datalist id="customerNamesList"></datalist>
         </div>
         <div class="field">
           <label>Remark</label>
@@ -405,6 +406,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
+      <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
@@ -527,6 +529,19 @@ function populateMonthFilter(){
     keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
   if(keys.includes(prev)) sel.value = prev;
 }
+function populateCustomerList(){
+  const dl = document.getElementById('customerNamesList');
+  const names = [...new Set(records.map(r=>r.customer_name))].sort();
+  dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}">`).join('');
+}
+/* Finds an existing customer name that matches case/space-insensitively,
+   so "dilian", "Dilian ", "DILIAN" all collapse into one stored name
+   instead of splitting into separate customer records. */
+function findExistingName(typed){
+  const norm = typed.trim().toLowerCase();
+  const match = records.find(r => r.customer_name.trim().toLowerCase() === norm);
+  return match ? match.customer_name : typed.trim();
+}
 
 /* ---------- Data load + realtime ---------- */
 async function loadRecords(){
@@ -542,6 +557,7 @@ async function loadRecords(){
   }
   records = data || [];
   populateMonthFilter();
+  populateCustomerList();
   renderAll();
 }
 
@@ -643,6 +659,9 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
+  const nameField = document.getElementById('f_name');
+  nameField.disabled = false;
+  nameField.value = '';
   newOverlay.classList.add('show');
 });
 
@@ -651,7 +670,8 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const amount = parseFloat(document.getElementById('f_amount').value);
   const capitalRaw = document.getElementById('f_capital').value;
   const capital = capitalRaw === '' ? 0 : parseFloat(capitalRaw);
-  const name = document.getElementById('f_name').value.trim();
+  const typedName = document.getElementById('f_name').value.trim();
+  const name = findExistingName(typedName); // reuses existing spelling/casing if it's the same customer
   const remark = document.getElementById('f_remark').value.trim();
 
   if(!date || !name || isNaN(amount) || amount < 0 || isNaN(capital) || capital < 0){
@@ -737,6 +757,19 @@ document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
   }
   await loadRecords();
   openDetail(currentDetailId);
+});
+
+document.getElementById('addTicketBtn').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
+  document.getElementById('newForm').reset();
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('f_capital').value = '';
+  const nameField = document.getElementById('f_name');
+  nameField.value = r.customer_name;
+  nameField.disabled = true; // locked so this ticket definitely lands under the same customer
+  detailOverlay.classList.remove('show');
+  newOverlay.classList.add('show');
 });
 
 document.getElementById('printBtn').addEventListener('click', ()=>{
