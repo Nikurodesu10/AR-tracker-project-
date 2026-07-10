@@ -394,6 +394,9 @@
         </div>
       </div>
 
+      <div class="section-label">Tickets Added</div>
+      <ul class="hist-list" id="d_tickets"></ul>
+
       <div class="section-label">Payment History</div>
       <ul class="hist-list" id="d_history"></ul>
       <div class="add-payment-row">
@@ -680,14 +683,32 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     return;
   }
 
-  const { error } = await supabase.from('ar_records').insert({
-    entry_date: date,
-    customer_name: name,
-    ticket_amount: amount,
-    capital: capital,
-    remark: remark,
-    payment_history: []
-  });
+  const existing = records.find(r => r.customer_name === name);
+
+  let error;
+  if(existing){
+    // Same customer already has a record — just append this ticket to it
+    // instead of creating a separate row.
+    const newTicketHistory = [...(existing.ticket_history || []), {date, amount}];
+    const newCapital = Number(existing.capital || 0) + capital;
+    const newRemark = remark
+      ? (existing.remark ? existing.remark + ' | ' + remark : remark)
+      : existing.remark;
+    ({ error } = await supabase.from('ar_records').update({
+      ticket_history: newTicketHistory,
+      capital: newCapital,
+      remark: newRemark
+    }).eq('id', existing.id));
+  } else {
+    ({ error } = await supabase.from('ar_records').insert({
+      entry_date: date,
+      customer_name: name,
+      ticket_history: [{date, amount}],
+      capital: capital,
+      remark: remark,
+      payment_history: []
+    }));
+  }
 
   if(error){
     alert('Could not save: ' + error.message);
@@ -715,6 +736,19 @@ function openDetail(id){
   const pct = paidPct(r);
   document.getElementById('d_pie').innerHTML = pieSvg(pct, 56);
   document.getElementById('d_pct').textContent = `${Math.round(pct*100)}%`;
+
+  const ticketsEl = document.getElementById('d_tickets');
+  ticketsEl.innerHTML = '';
+  const tHist = r.ticket_history || [];
+  if(tHist.length === 0){
+    ticketsEl.innerHTML = '<div class="hist-empty">No tickets recorded yet.</div>';
+  } else {
+    tHist.slice().reverse().forEach(t=>{
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="hd">${t.date}</span><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
+      ticketsEl.appendChild(li);
+    });
+  }
 
   const histEl = document.getElementById('d_history');
   histEl.innerHTML = '';
@@ -777,33 +811,33 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const current = records.find(x=>x.id === currentDetailId);
   if(!current) return;
 
-  // Pull in every ticket that belongs to this same customer, not just the one open
-  const custRecords = records
-    .filter(r => r.customer_name === current.customer_name)
-    .sort((a,b)=> a.entry_date.localeCompare(b.entry_date));
+  // Still handles any leftover cases where a customer has more than one
+  // record, but normally there's just one row per customer now.
+  const custRecords = records.filter(r => r.customer_name === current.customer_name);
 
   const totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
   const totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
   const totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
 
-  const ticketRows = custRecords.map(r=>`
-    <tr>
-      <td>${r.record_no}</td>
-      <td>${r.entry_date}</td>
-      <td style="text-align:right">${peso(r.ticket_amount)}</td>
-      <td style="text-align:right">${peso(r.amount_paid)}</td>
-      <td style="text-align:right">${peso(r.balance)}</td>
-    </tr>`).join('');
+  // Every individual ticket ever added for this customer, oldest first
+  const allTickets = [];
+  custRecords.forEach(r=>{
+    (r.ticket_history || []).forEach(t=> allTickets.push(t));
+  });
+  allTickets.sort((a,b)=> a.date.localeCompare(b.date));
+  const ticketRows = allTickets.length
+    ? allTickets.map(t=>`<tr><td>${t.date}</td><td style="text-align:right">${peso(t.amount)}</td></tr>`).join('')
+    : '<tr><td colspan="2">No tickets recorded.</td></tr>';
 
-  // Combined payment history across all of this customer's tickets, tagged by record no.
+  // Combined payment history across this customer's record(s)
   const allPayments = [];
   custRecords.forEach(r=>{
-    (r.payment_history || []).forEach(p=> allPayments.push({...p, record_no:r.record_no}));
+    (r.payment_history || []).forEach(p=> allPayments.push(p));
   });
   allPayments.sort((a,b)=> a.date.localeCompare(b.date));
   const paymentRows = allPayments.length
-    ? allPayments.map(p=>`<tr><td>${p.date}</td><td>${p.record_no}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="3">No payments recorded.</td></tr>';
+    ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
+    : '<tr><td colspan="2">No payments recorded.</td></tr>';
 
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
@@ -813,26 +847,21 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     <h3 style="margin-top:18px; font-size:15px;">Tickets</h3>
     <table>
       <thead><tr>
-        <th style="text-align:left">Record No</th>
         <th style="text-align:left">Date</th>
-        <th style="text-align:right">Ticket Amount</th>
-        <th style="text-align:right">Paid</th>
-        <th style="text-align:right">Balance</th>
+        <th style="text-align:right">Amount</th>
       </tr></thead>
       <tbody>${ticketRows}</tbody>
       <tfoot>
         <tr class="totals">
-          <td colspan="2"><strong>Total</strong></td>
+          <td><strong>Total Sales</strong></td>
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
-          <td style="text-align:right"><strong>${peso(totalPaid)}</strong></td>
-          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
       </tfoot>
     </table>
 
     <h3 style="margin-top:22px; font-size:15px;">Payment History</h3>
     <table>
-      <thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Record No</th><th style="text-align:right">Amount</th></tr></thead>
+      <thead><tr><th style="text-align:left">Date</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${paymentRows}</tbody>
     </table>
 
