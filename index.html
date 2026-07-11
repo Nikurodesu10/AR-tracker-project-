@@ -203,8 +203,9 @@
     main{padding:20px 14px 50px;}
     .grid2{grid-template-columns:1fr;}
     table.ledger{font-size:12.5px;}
-    .remark-cell{display:none;}
-    table.ledger thead th:nth-child(6){display:none;}
+    table.ledger th:nth-child(2), table.ledger td:nth-child(2),
+    table.ledger th:nth-child(4), table.ledger td:nth-child(4),
+    table.ledger th:nth-child(5), table.ledger td:nth-child(5){display:none;}
   }
 </style>
 </head>
@@ -294,11 +295,12 @@
         <thead>
           <tr>
             <th>No.</th>
-            <th>Date</th>
-            <th>Name</th>
+            <th>Booking Date</th>
+            <th>Passenger Name</th>
+            <th>Departure Date</th>
+            <th>Flight Route</th>
             <th style="text-align:right">Ticket Amount</th>
             <th style="text-align:right">Balance</th>
-            <th>Remark</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -317,7 +319,7 @@
   <div class="modal">
     <div class="modal-head">
       <div>
-        <h2>New Receivable</h2>
+        <h2>New Ticket</h2>
         <div class="rn">Record no. assigned automatically</div>
       </div>
       <button class="modal-close" data-close="newOverlay">&times;</button>
@@ -326,22 +328,58 @@
       <form id="newForm">
         <div class="grid2">
           <div class="field">
-            <label>Date</label>
+            <label>Booking Date</label>
             <input type="date" id="f_date" required>
           </div>
           <div class="field">
+            <label>Passenger Name</label>
+            <input type="text" id="f_name" placeholder="Full name" list="customerNamesList" autocomplete="off" required>
+            <datalist id="customerNamesList"></datalist>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Departure Date</label>
+            <input type="date" id="f_depdate">
+          </div>
+          <div class="field">
+            <label>Flight Route</label>
+            <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Departure Time</label>
+            <input type="time" id="f_deptime">
+          </div>
+          <div class="field">
+            <label>Arrival Time</label>
+            <input type="time" id="f_arrtime">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Airline</label>
+            <input type="text" id="f_airline" placeholder="e.g. Cebu Pacific">
+          </div>
+          <div class="field">
+            <label># of Pax</label>
+            <input type="number" id="f_pax" step="1" min="1" placeholder="1">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
             <label>Ticket Amount</label>
             <input type="number" id="f_amount" step="0.01" min="0" placeholder="0.00" required>
+          </div>
+          <div class="field">
+            <label>Total</label>
+            <input type="number" id="f_total" step="0.01" min="0" placeholder="0.00">
           </div>
         </div>
         <div class="field">
           <label>Capital</label>
           <input type="number" id="f_capital" step="0.01" min="0" placeholder="0.00 (cost tied to this ticket)">
-        </div>
-        <div class="field">
-          <label>Customer Name</label>
-          <input type="text" id="f_name" placeholder="Full name" list="customerNamesList" autocomplete="off" required>
-          <datalist id="customerNamesList"></datalist>
         </div>
         <div class="field">
           <label>Remark</label>
@@ -634,13 +672,18 @@ function renderTable(){
     const agingHtml = (r.balance > 0 && bucket !== 'current')
       ? `<span class="aging-tag ${bucket==='crit'?'crit':'warn'}">${agingLabel(bucket)}</span>`
       : '';
+    const tHist = r.ticket_history || [];
+    const latest = tHist.length ? tHist[tHist.length - 1] : null;
+    const depDate = latest && latest.departure_date ? latest.departure_date : '—';
+    const route = latest && latest.flight_route ? escapeHtml(latest.flight_route) : '—';
     tr.innerHTML = `
       <td>${r.record_no}</td>
       <td>${r.entry_date}</td>
       <td class="name">${escapeHtml(r.customer_name)}</td>
+      <td>${depDate}</td>
+      <td>${route}</td>
       <td class="amt">${peso(r.ticket_amount)}</td>
       <td class="amt">${peso(r.balance)}</td>
-      <td class="remark-cell">${escapeHtml(r.remark || '—')}</td>
       <td><span class="pill ${r.status}">${r.status}</span>${agingHtml}<span class="row-pie">${pieSvg(paidPct(r), 20)}</span></td>
     `;
     tbody.appendChild(tr);
@@ -663,6 +706,13 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
+  document.getElementById('f_depdate').value = '';
+  document.getElementById('f_route').value = '';
+  document.getElementById('f_deptime').value = '';
+  document.getElementById('f_arrtime').value = '';
+  document.getElementById('f_airline').value = '';
+  document.getElementById('f_pax').value = '';
+  document.getElementById('f_total').value = '';
   const nameField = document.getElementById('f_name');
   nameField.disabled = false;
   nameField.value = '';
@@ -678,18 +728,41 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const name = findExistingName(typedName); // reuses existing spelling/casing if it's the same customer
   const remark = document.getElementById('f_remark').value.trim();
 
+  const depDate = document.getElementById('f_depdate').value;
+  const route = document.getElementById('f_route').value.trim();
+  const depTime = document.getElementById('f_deptime').value;
+  const arrTime = document.getElementById('f_arrtime').value;
+  const airline = document.getElementById('f_airline').value.trim();
+  const paxRaw = document.getElementById('f_pax').value;
+  const pax = paxRaw === '' ? 1 : parseInt(paxRaw, 10);
+  const totalRaw = document.getElementById('f_total').value;
+  const total = totalRaw === '' ? amount : parseFloat(totalRaw);
+
   if(!date || !name || isNaN(amount) || amount < 0 || isNaN(capital) || capital < 0){
-    alert('Please fill in date, name, and valid ticket amount / capital.');
+    alert('Please fill in booking date, passenger name, and a valid ticket amount / capital.');
     return;
   }
+
+  const ticketEntry = {
+    date, // booking date, kept as "date" for backward compatibility with older entries
+    amount,
+    booking_date: date,
+    departure_date: depDate,
+    flight_route: route,
+    departure_time: depTime,
+    arrival_time: arrTime,
+    airline: airline,
+    pax: isNaN(pax) ? 1 : pax,
+    total: isNaN(total) ? amount : total
+  };
 
   const existing = records.find(r => r.customer_name === name);
 
   let error;
   if(existing){
-    // Same customer already has a record — just append this ticket to it
+    // Same passenger already has a record — just append this ticket to it
     // instead of creating a separate row.
-    const newTicketHistory = [...(existing.ticket_history || []), {date, amount}];
+    const newTicketHistory = [...(existing.ticket_history || []), ticketEntry];
     const newCapital = Number(existing.capital || 0) + capital;
     const newRemark = remark
       ? (existing.remark ? existing.remark + ' | ' + remark : remark)
@@ -703,7 +776,7 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     ({ error } = await supabase.from('ar_records').insert({
       entry_date: date,
       customer_name: name,
-      ticket_history: [{date, amount}],
+      ticket_history: [ticketEntry],
       capital: capital,
       remark: remark,
       payment_history: []
@@ -745,7 +818,13 @@ function openDetail(id){
   } else {
     tHist.slice().reverse().forEach(t=>{
       const li = document.createElement('li');
-      li.innerHTML = `<span class="hd">${t.date}</span><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
+      const bits = [];
+      if(t.flight_route) bits.push(escapeHtml(t.flight_route));
+      if(t.airline) bits.push(escapeHtml(t.airline));
+      if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + t.departure_time : ''}`);
+      if(t.pax) bits.push(`${t.pax} pax`);
+      const detailLine = bits.length ? `<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${bits.join(' · ')}</div>` : '';
+      li.innerHTML = `<div class="hd">Booked ${t.date}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
       ticketsEl.appendChild(li);
     });
   }
@@ -800,6 +879,13 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
+  document.getElementById('f_depdate').value = '';
+  document.getElementById('f_route').value = '';
+  document.getElementById('f_deptime').value = '';
+  document.getElementById('f_arrtime').value = '';
+  document.getElementById('f_airline').value = '';
+  document.getElementById('f_pax').value = '';
+  document.getElementById('f_total').value = '';
   const nameField = document.getElementById('f_name');
   nameField.value = r.customer_name;
   nameField.disabled = true; // locked so this ticket definitely lands under the same customer
@@ -824,10 +910,17 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   custRecords.forEach(r=>{
     (r.ticket_history || []).forEach(t=> allTickets.push(t));
   });
-  allTickets.sort((a,b)=> a.date.localeCompare(b.date));
+  allTickets.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
   const ticketRows = allTickets.length
-    ? allTickets.map(t=>`<tr><td>${t.date}</td><td style="text-align:right">${peso(t.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="2">No tickets recorded.</td></tr>';
+    ? allTickets.map(t=>`
+        <tr>
+          <td>${t.departure_date || t.date || ''}</td>
+          <td>${escapeHtml(t.flight_route || '—')}</td>
+          <td>${escapeHtml(t.airline || '—')}</td>
+          <td style="text-align:center">${t.pax || 1}</td>
+          <td style="text-align:right">${peso(t.amount)}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="5">No tickets recorded.</td></tr>';
 
   // Combined payment history across this customer's record(s)
   const allPayments = [];
@@ -847,21 +940,24 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     <h3 style="margin-top:18px; font-size:15px;">Tickets</h3>
     <table>
       <thead><tr>
-        <th style="text-align:left">Date</th>
+        <th style="text-align:left">Departure Date</th>
+        <th style="text-align:left">Flight Route</th>
+        <th style="text-align:left">Airline</th>
+        <th style="text-align:center">Pax</th>
         <th style="text-align:right">Amount</th>
       </tr></thead>
       <tbody>${ticketRows}</tbody>
       <tfoot>
         <tr class="totals">
-          <td><strong>Total Ticket Amount</strong></td>
+          <td colspan="4"><strong>Total Ticket Amount</strong></td>
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td>Paid to Date</td>
+          <td colspan="4">Paid to Date</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
-          <td><strong>Balance</strong></td>
+          <td colspan="4"><strong>Balance</strong></td>
           <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
       </tfoot>
@@ -917,11 +1013,19 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- CSV export ---------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
-  const headers = ['Record No','Date','Customer Name','Capital','Ticket Amount','Amount Paid','Balance','Status','Remark'];
-  const rows = records.map(r=>[
-    r.record_no, r.entry_date, r.customer_name, r.capital, r.ticket_amount, r.amount_paid, r.balance, r.status,
-    (r.remark||'').replace(/"/g,'""')
-  ]);
+  const headers = ['Record No','Passenger Name','Booking Date','Departure Date','Flight Route','Departure Time','Arrival Time','Airline','Pax','Ticket Amount','Total','Capital','Amount Paid (Passenger Total)','Balance (Passenger Total)','Status','Remark'];
+  const rows = [];
+  records.forEach(r=>{
+    const tickets = (r.ticket_history && r.ticket_history.length) ? r.ticket_history : [{date:r.entry_date, amount:r.ticket_amount}];
+    tickets.forEach(t=>{
+      rows.push([
+        r.record_no, r.customer_name, t.booking_date || t.date || '', t.departure_date || '', t.flight_route || '',
+        t.departure_time || '', t.arrival_time || '', t.airline || '', t.pax || '', t.amount || 0, t.total || t.amount || 0,
+        r.capital, r.amount_paid, r.balance, r.status,
+        (r.remark||'').replace(/"/g,'""')
+      ]);
+    });
+  });
   let csv = headers.join(',') + '\n';
   rows.forEach(row=>{
     csv += row.map(v=> typeof v === 'string' && (v.includes(',')||v.includes('"')) ? `"${v}"` : v).join(',') + '\n';
