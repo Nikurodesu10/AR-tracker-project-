@@ -731,7 +731,7 @@ function renderTable(){
     const depDate = latest && latest.departure_date ? latest.departure_date : '—';
     const route = latest && latest.flight_route ? escapeHtml(latest.flight_route) : '—';
     const passengerLine = latest && latest.passenger_name
-      ? `<div style="font-size:11px; color:var(--text-dim); font-weight:400;">${escapeHtml(nameWithPax(latest.passenger_name, latest.pax))}</div>`
+      ? `<div style="font-size:11px; color:var(--text-dim); font-weight:400;">${escapeHtml(latest.passenger_name)}</div>`
       : '';
     tr.innerHTML = `
       <td>${r.record_no}</td>
@@ -884,7 +884,7 @@ function openDetail(id){
     tHist.slice().reverse().forEach(t=>{
       const li = document.createElement('li');
       const bits = [];
-      if(t.passenger_name) bits.push(escapeHtml(nameWithPax(t.passenger_name, t.pax)));
+      if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
       if(t.flight_route) bits.push(escapeHtml(t.flight_route));
       if(t.airline) bits.push(escapeHtml(t.airline));
       if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + t.departure_time : ''}`);
@@ -985,7 +985,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     ? allTickets.map(t=>`
         <tr>
           <td>${t.departure_date || t.date || ''}</td>
-          <td>${escapeHtml(t.passenger_name ? nameWithPax(t.passenger_name, t.pax) : '—')}</td>
+          <td>${escapeHtml(t.passenger_name || '—')}</td>
           <td>${escapeHtml(t.flight_route || '—')}</td>
           <td>${escapeHtml(t.airline || '—')}</td>
           <td style="text-align:center">${t.pax || 1}</td>
