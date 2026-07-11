@@ -296,7 +296,7 @@
           <tr>
             <th>No.</th>
             <th>Booking Date</th>
-            <th>Passenger Name</th>
+            <th>Account Name</th>
             <th>Departure Date</th>
             <th>Flight Route</th>
             <th style="text-align:right">Ticket Amount</th>
@@ -332,7 +332,7 @@
             <input type="date" id="f_date" required>
           </div>
           <div class="field">
-            <label>Passenger Name</label>
+            <label>Account Name</label>
             <input type="text" id="f_name" placeholder="Full name" list="customerNamesList" autocomplete="off" required>
             <datalist id="customerNamesList"></datalist>
           </div>
@@ -360,25 +360,32 @@
         <div class="grid2">
           <div class="field">
             <label>Airline</label>
-            <input type="text" id="f_airline" placeholder="e.g. Cebu Pacific">
+            <select id="f_airline">
+              <option value="">Select airline</option>
+              <option value="Cebu Pacific">Cebu Pacific</option>
+              <option value="Philippine Airlines">Philippine Airlines</option>
+              <option value="Air Asia">Air Asia</option>
+              <option value="__other__">Other…</option>
+            </select>
+            <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
           </div>
           <div class="field">
             <label># of Pax</label>
-            <input type="number" id="f_pax" step="1" min="1" placeholder="1">
+            <input type="number" id="f_pax" step="1" min="1" placeholder="1" value="1">
           </div>
         </div>
         <div class="grid2">
           <div class="field">
-            <label>Ticket Amount</label>
+            <label>Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span></label>
             <input type="number" id="f_amount" step="0.01" min="0" placeholder="0.00" required>
           </div>
           <div class="field">
-            <label>Total</label>
-            <input type="number" id="f_total" step="0.01" min="0" placeholder="0.00">
+            <label>Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span></label>
+            <input type="number" id="f_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
           </div>
         </div>
         <div class="field">
-          <label>Capital</label>
+          <label>Capital <span style="font-weight:400; color:var(--text-dim);">(per pax — total capital auto-computed)</span></label>
           <input type="number" id="f_capital" step="0.01" min="0" placeholder="0.00 (cost tied to this ticket)">
         </div>
         <div class="field">
@@ -584,6 +591,34 @@ function findExistingName(typed){
   const match = records.find(r => r.customer_name.trim().toLowerCase() === norm);
   return match ? match.customer_name : typed.trim();
 }
+function nameWithPax(name, pax){
+  return (pax && pax > 1) ? `${name} et al.` : name;
+}
+
+/* Live-recompute the Total field as ticket amount / pax change */
+function recomputeFormTotal(){
+  const amt = parseFloat(document.getElementById('f_amount').value) || 0;
+  const pax = parseInt(document.getElementById('f_pax').value, 10) || 1;
+  document.getElementById('f_total').value = (amt * pax).toFixed(2);
+}
+document.getElementById('f_amount').addEventListener('input', recomputeFormTotal);
+document.getElementById('f_pax').addEventListener('input', recomputeFormTotal);
+
+/* "Other…" airline option reveals a free-text field */
+document.getElementById('f_airline').addEventListener('change', (e)=>{
+  const otherField = document.getElementById('f_airline_other');
+  if(e.target.value === '__other__'){
+    otherField.style.display = 'block';
+    otherField.value = '';
+  } else {
+    otherField.style.display = 'none';
+  }
+});
+function getSelectedAirline(){
+  const sel = document.getElementById('f_airline').value;
+  if(sel === '__other__') return document.getElementById('f_airline_other').value.trim();
+  return sel;
+}
 
 /* ---------- Data load + realtime ---------- */
 async function loadRecords(){
@@ -679,7 +714,7 @@ function renderTable(){
     tr.innerHTML = `
       <td>${r.record_no}</td>
       <td>${r.entry_date}</td>
-      <td class="name">${escapeHtml(r.customer_name)}</td>
+      <td class="name">${escapeHtml(nameWithPax(r.customer_name, latest ? latest.pax : 1))}</td>
       <td>${depDate}</td>
       <td>${route}</td>
       <td class="amt">${peso(r.ticket_amount)}</td>
@@ -711,7 +746,9 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
-  document.getElementById('f_pax').value = '';
+  document.getElementById('f_airline_other').value = '';
+  document.getElementById('f_airline_other').style.display = 'none';
+  document.getElementById('f_pax').value = '1';
   document.getElementById('f_total').value = '';
   const nameField = document.getElementById('f_name');
   nameField.disabled = false;
@@ -721,9 +758,8 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
 
 document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('f_date').value;
-  const amount = parseFloat(document.getElementById('f_amount').value);
-  const capitalRaw = document.getElementById('f_capital').value;
-  const capital = capitalRaw === '' ? 0 : parseFloat(capitalRaw);
+  const unitAmount = parseFloat(document.getElementById('f_amount').value); // ticket price per pax
+  const capitalPerPax = document.getElementById('f_capital').value === '' ? 0 : parseFloat(document.getElementById('f_capital').value);
   const typedName = document.getElementById('f_name').value.trim();
   const name = findExistingName(typedName); // reuses existing spelling/casing if it's the same customer
   const remark = document.getElementById('f_remark').value.trim();
@@ -732,38 +768,41 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const route = document.getElementById('f_route').value.trim();
   const depTime = document.getElementById('f_deptime').value;
   const arrTime = document.getElementById('f_arrtime').value;
-  const airline = document.getElementById('f_airline').value.trim();
+  const airline = getSelectedAirline();
   const paxRaw = document.getElementById('f_pax').value;
   const pax = paxRaw === '' ? 1 : parseInt(paxRaw, 10);
-  const totalRaw = document.getElementById('f_total').value;
-  const total = totalRaw === '' ? amount : parseFloat(totalRaw);
+  const paxCount = (isNaN(pax) || pax < 1) ? 1 : pax;
 
-  if(!date || !name || isNaN(amount) || amount < 0 || isNaN(capital) || capital < 0){
-    alert('Please fill in booking date, passenger name, and a valid ticket amount / capital.');
+  if(!date || !name || isNaN(unitAmount) || unitAmount < 0 || isNaN(capitalPerPax) || capitalPerPax < 0){
+    alert('Please fill in booking date, account name, and a valid ticket amount / capital.');
     return;
   }
 
+  const total = unitAmount * paxCount;          // # of Pax × Ticket Amount
+  const capitalContribution = capitalPerPax * paxCount; // # of Pax × Capital
+
   const ticketEntry = {
     date, // booking date, kept as "date" for backward compatibility with older entries
-    amount,
+    amount: total,      // the full amount owed for this booking (feeds balance calc)
+    unit_amount: unitAmount,
     booking_date: date,
     departure_date: depDate,
     flight_route: route,
     departure_time: depTime,
     arrival_time: arrTime,
     airline: airline,
-    pax: isNaN(pax) ? 1 : pax,
-    total: isNaN(total) ? amount : total
+    pax: paxCount,
+    total: total
   };
 
   const existing = records.find(r => r.customer_name === name);
 
   let error;
   if(existing){
-    // Same passenger already has a record — just append this ticket to it
+    // Same account already has a record — just append this ticket to it
     // instead of creating a separate row.
     const newTicketHistory = [...(existing.ticket_history || []), ticketEntry];
-    const newCapital = Number(existing.capital || 0) + capital;
+    const newCapital = Number(existing.capital || 0) + capitalContribution;
     const newRemark = remark
       ? (existing.remark ? existing.remark + ' | ' + remark : remark)
       : existing.remark;
@@ -777,7 +816,7 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
       entry_date: date,
       customer_name: name,
       ticket_history: [ticketEntry],
-      capital: capital,
+      capital: capitalContribution,
       remark: remark,
       payment_history: []
     }));
@@ -798,7 +837,9 @@ function openDetail(id){
   const r = records.find(x=>x.id === id);
   if(!r) return;
   currentDetailId = id;
-  document.getElementById('d_name').textContent = r.customer_name;
+  const rHist = r.ticket_history || [];
+  const rLatest = rHist.length ? rHist[rHist.length - 1] : null;
+  document.getElementById('d_name').textContent = nameWithPax(r.customer_name, rLatest ? rLatest.pax : 1);
   document.getElementById('d_recordNo').textContent = `${r.record_no} · ${r.entry_date}`;
   document.getElementById('d_capital').textContent = peso(r.capital);
   document.getElementById('d_ticket').textContent = peso(r.ticket_amount);
@@ -884,7 +925,9 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
-  document.getElementById('f_pax').value = '';
+  document.getElementById('f_airline_other').value = '';
+  document.getElementById('f_airline_other').style.display = 'none';
+  document.getElementById('f_pax').value = '1';
   document.getElementById('f_total').value = '';
   const nameField = document.getElementById('f_name');
   nameField.value = r.customer_name;
@@ -932,10 +975,14 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
     : '<tr><td colspan="2">No payments recorded.</td></tr>';
 
+  // Use the pax count from this customer's most recent ticket to decide "et al."
+  const latestTicket = allTickets.length ? allTickets[allTickets.length - 1] : null;
+  const displayName = nameWithPax(current.customer_name, latestTicket ? latestTicket.pax : 1);
+
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
-    <p style="margin:0 0 18px; font-size:12.5px; color:#555;">Statement of Account</p>
-    <p>Customer: <strong>${escapeHtml(current.customer_name)}</strong></p>
+    <p style="margin:0 0 4px; font-size:12.5px; color:#555;">Statement of Account</p>
+    <h2 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 18px;">${escapeHtml(displayName)}</h2>
 
     <h3 style="margin-top:18px; font-size:15px;">Tickets</h3>
     <table>
@@ -1013,14 +1060,15 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- CSV export ---------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
-  const headers = ['Record No','Passenger Name','Booking Date','Departure Date','Flight Route','Departure Time','Arrival Time','Airline','Pax','Ticket Amount','Total','Capital','Amount Paid (Passenger Total)','Balance (Passenger Total)','Status','Remark'];
+  const headers = ['Record No','Account Name','Booking Date','Departure Date','Flight Route','Departure Time','Arrival Time','Airline','Pax','Ticket Amount (per pax)','Total','Capital (Total)','Amount Paid (Account Total)','Balance (Account Total)','Status','Remark'];
   const rows = [];
   records.forEach(r=>{
     const tickets = (r.ticket_history && r.ticket_history.length) ? r.ticket_history : [{date:r.entry_date, amount:r.ticket_amount}];
     tickets.forEach(t=>{
       rows.push([
         r.record_no, r.customer_name, t.booking_date || t.date || '', t.departure_date || '', t.flight_route || '',
-        t.departure_time || '', t.arrival_time || '', t.airline || '', t.pax || '', t.amount || 0, t.total || t.amount || 0,
+        t.departure_time || '', t.arrival_time || '', t.airline || '', t.pax || 1,
+        (t.unit_amount !== undefined ? t.unit_amount : t.amount) || 0, t.total || t.amount || 0,
         r.capital, r.amount_paid, r.balance, r.status,
         (r.remark||'').replace(/"/g,'""')
       ]);
