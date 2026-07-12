@@ -1060,7 +1060,16 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
       <p style="font-size:10.5px; color:#888; margin-top:6px;">Cell # 0999-9963218 &nbsp;|&nbsp; Tel. (034) 3993223</p>
     </div>
   `;
-  window.print();
+
+  // Data-URI images still need a beat to decode/paint before print() runs,
+  // otherwise the PDF can come out with the logo missing. Wait for both
+  // logo images to finish loading (or fail) before printing.
+  const printEl = document.getElementById('printStatement');
+  const imgs = Array.from(printEl.querySelectorAll('img'));
+  Promise.all(imgs.map(img => img.complete
+    ? Promise.resolve()
+    : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
+  )).then(()=> window.print());
 });
 
 document.getElementById('saveDetailBtn').addEventListener('click', async ()=>{
