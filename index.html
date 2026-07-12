@@ -984,6 +984,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const ticketRows = allTickets.length
     ? allTickets.map(t=>`
         <tr>
+          <td>${t.booking_date || t.date || ''}</td>
           <td>${t.departure_date || t.date || ''}</td>
           <td>${escapeHtml(t.passenger_name || '—')}</td>
           <td>${escapeHtml(t.flight_route || '—')}</td>
@@ -991,7 +992,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:center">${t.pax || 1}</td>
           <td style="text-align:right">${peso(t.amount)}</td>
         </tr>`).join('')
-    : '<tr><td colspan="6">No tickets recorded.</td></tr>';
+    : '<tr><td colspan="7">No tickets recorded.</td></tr>';
 
   // Combined payment history across this customer's record(s)
   const allPayments = [];
@@ -1011,6 +1012,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     <h3 style="margin-top:18px; font-size:15px;">Tickets</h3>
     <table>
       <thead><tr>
+        <th style="text-align:left">Booking Date</th>
         <th style="text-align:left">Departure Date</th>
         <th style="text-align:left">Passenger</th>
         <th style="text-align:left">Flight Route</th>
@@ -1021,15 +1023,15 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
       <tbody>${ticketRows}</tbody>
       <tfoot>
         <tr class="totals">
-          <td colspan="5"><strong>Total Ticket Amount</strong></td>
+          <td colspan="6"><strong>Total Ticket Amount</strong></td>
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td colspan="5">Paid to Date</td>
+          <td colspan="6">Paid to Date</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
-          <td colspan="5"><strong>Balance</strong></td>
+          <td colspan="6"><strong>Balance</strong></td>
           <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
       </tfoot>
