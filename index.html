@@ -397,8 +397,8 @@
   <div class="modal">
     <div class="modal-head">
       <div>
-        <h2>New Ticket</h2>
-        <div class="rn">Record no. assigned automatically</div>
+        <h2 id="newModalTitle">New Ticket</h2>
+        <div class="rn" id="newModalSub">Record no. assigned automatically</div>
       </div>
       <button class="modal-close" data-close="newOverlay">&times;</button>
     </div>
@@ -483,6 +483,7 @@
       </form>
     </div>
     <div class="modal-foot">
+      <button class="btn danger" id="deleteTicketBtn" style="display:none;">Delete Ticket</button>
       <button class="btn secondary" data-close="newOverlay">Cancel</button>
       <button class="btn" id="saveNewBtn">Save Entry</button>
     </div>
@@ -746,6 +747,24 @@ function getSelectedAirline(){
   if(sel === '__other__') return document.getElementById('f_airline_other').value.trim();
   return sel;
 }
+function setAirlineField(value){
+  const sel = document.getElementById('f_airline');
+  const otherField = document.getElementById('f_airline_other');
+  const known = ['Cebu Pacific','Philippine Airlines','Air Asia'];
+  if(!value){
+    sel.value = '';
+    otherField.value = '';
+    otherField.style.display = 'none';
+  } else if(known.includes(value)){
+    sel.value = value;
+    otherField.value = '';
+    otherField.style.display = 'none';
+  } else {
+    sel.value = '__other__';
+    otherField.value = value;
+    otherField.style.display = 'block';
+  }
+}
 
 /* ---------- Data load + realtime ---------- */
 async function loadRecords(){
@@ -867,7 +886,13 @@ document.getElementById('monthFilter').addEventListener('change', renderTable);
 
 /* ---------- New entry modal ---------- */
 const newOverlay = document.getElementById('newOverlay');
+let editingTicket = null; // { recordId, index } when editing an existing ticket, else null
+
 document.getElementById('newRecordBtn').addEventListener('click', ()=>{
+  editingTicket = null;
+  document.getElementById('newModalTitle').textContent = 'New Ticket';
+  document.getElementById('newModalSub').textContent = 'Record no. assigned automatically';
+  document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
@@ -887,6 +912,42 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   nameField.value = '';
   newOverlay.classList.add('show');
 });
+
+function openEditTicket(recordId, index){
+  const r = records.find(x=>x.id === recordId);
+  if(!r) return;
+  const t = (r.ticket_history || [])[index];
+  if(!t) return;
+
+  editingTicket = { recordId, index };
+  document.getElementById('newModalTitle').textContent = 'Edit Ticket';
+  document.getElementById('newModalSub').textContent = r.record_no;
+  document.getElementById('deleteTicketBtn').style.display = 'inline-block';
+
+  document.getElementById('f_date').value = t.booking_date || t.date || '';
+  const nameField = document.getElementById('f_name');
+  nameField.value = r.customer_name;
+  nameField.disabled = true; // account name stays tied to the record it's already on
+  document.getElementById('f_pname').value = t.passenger_name || '';
+  document.getElementById('f_depdate').value = t.departure_date || '';
+  document.getElementById('f_route').value = t.flight_route || '';
+  document.getElementById('f_deptime').value = t.departure_time || '';
+  document.getElementById('f_arrtime').value = t.arrival_time || '';
+  setAirlineField(t.airline || '');
+  const pax = t.pax || 1;
+  document.getElementById('f_pax').value = pax;
+  const unit = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / pax);
+  document.getElementById('f_amount').value = unit;
+  document.getElementById('f_total').value = (unit * pax).toFixed(2);
+  // Per-ticket capital isn't tracked separately (only the account-level total is),
+  // so capital fields are left blank here — editing a ticket won't touch capital.
+  document.getElementById('f_capital').value = '';
+  document.getElementById('f_capital_total').value = '';
+  document.getElementById('f_remark').value = '';
+
+  detailOverlay.classList.remove('show');
+  newOverlay.classList.add('show');
+}
 
 document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('f_date').value;
@@ -929,9 +990,28 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     total: total
   };
 
+  let error;
+
+  if(editingTicket){
+    // Editing an existing ticket in place — replace just that entry,
+    // leave capital and remark on the record untouched.
+    const record = records.find(r => r.id === editingTicket.recordId);
+    if(!record){ alert('Could not find that record.'); return; }
+    const newTicketHistory = [...(record.ticket_history || [])];
+    newTicketHistory[editingTicket.index] = ticketEntry;
+    ({ error } = await withRetry(() => supabase.from('ar_records').update({
+      ticket_history: newTicketHistory
+    }).eq('id', record.id)));
+
+    if(error){ alert('Could not save: ' + error.message); return; }
+    newOverlay.classList.remove('show');
+    await loadRecords();
+    openDetail(editingTicket.recordId);
+    return;
+  }
+
   const existing = records.find(r => r.customer_name === name);
 
-  let error;
   if(existing){
     // Same account already has a record — just append this ticket to it
     // instead of creating a separate row.
@@ -964,6 +1044,31 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   loadRecords();
 });
 
+document.getElementById('deleteTicketBtn').addEventListener('click', async ()=>{
+  if(!editingTicket) return;
+  if(!confirm('Delete this ticket permanently? This cannot be undone.')) return;
+
+  const record = records.find(r => r.id === editingTicket.recordId);
+  if(!record) return;
+  const newTicketHistory = (record.ticket_history || []).filter((_, i) => i !== editingTicket.index);
+
+  const { error } = await withRetry(() => supabase.from('ar_records').update({
+    ticket_history: newTicketHistory
+  }).eq('id', record.id));
+
+  if(error){
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  newOverlay.classList.remove('show');
+  const recordId = editingTicket.recordId;
+  editingTicket = null;
+  await loadRecords();
+  if((records.find(r=>r.id===recordId)?.ticket_history || []).length > 0){
+    openDetail(recordId);
+  }
+});
+
 /* ---------- Detail modal ---------- */
 const detailOverlay = document.getElementById('detailOverlay');
 
@@ -989,8 +1094,12 @@ function openDetail(id){
   if(tHist.length === 0){
     ticketsEl.innerHTML = '<div class="hist-empty">No tickets recorded yet.</div>';
   } else {
-    tHist.slice().reverse().forEach(t=>{
+    const indexed = tHist.map((t, i) => ({t, i}));
+    indexed.slice().reverse().forEach(({t, i})=>{
       const li = document.createElement('li');
+      li.style.cursor = 'pointer';
+      li.title = 'Click to edit this ticket';
+      li.addEventListener('click', ()=> openEditTicket(r.id, i));
       const bits = [];
       if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
       if(t.flight_route) bits.push(escapeHtml(t.flight_route));
@@ -1050,6 +1159,10 @@ document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
 document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   const r = records.find(x=>x.id === currentDetailId);
   if(!r) return;
+  editingTicket = null;
+  document.getElementById('newModalTitle').textContent = 'New Ticket';
+  document.getElementById('newModalSub').textContent = r.record_no;
+  document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
