@@ -332,7 +332,7 @@
 <div class="overlay" id="bsOverlay">
   <div class="modal">
     <div class="modal-head">
-      <div><h2>New Transaction</h2></div>
+      <div><h2 id="bsModalTitle">New Transaction</h2></div>
       <button class="modal-close" data-close="bsOverlay">&times;</button>
     </div>
     <div class="modal-body">
@@ -358,6 +358,7 @@
       </form>
     </div>
     <div class="modal-foot">
+      <button class="btn danger" id="bsDeleteBtn" style="display:none;">Delete</button>
       <button class="btn secondary" data-close="bsOverlay">Cancel</button>
       <button class="btn" id="bsSaveBtn">Save</button>
     </div>
@@ -494,6 +495,8 @@ function renderBsLedger(account){
   entries.forEach(e=>{
     running += Number(e.deposit||0) - Number(e.withdraw||0);
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', ()=> openBsEntry(e));
     tr.innerHTML = `
       <td>${e.entry_date}</td>
       <td>${escapeHtml(e.particular || '—')}</td>
@@ -514,11 +517,27 @@ document.querySelectorAll('.bs-folder').forEach(folder=>{
 document.getElementById('bsBackBtn').addEventListener('click', showBsFolders);
 
 const bsOverlay = document.getElementById('bsOverlay');
+let currentBsEditId = null; // null = adding a new entry, otherwise editing this entry's id
+
 document.getElementById('bsAddEntryBtn').addEventListener('click', ()=>{
+  currentBsEditId = null;
+  document.getElementById('bsModalTitle').textContent = 'New Transaction';
+  document.getElementById('bsDeleteBtn').style.display = 'none';
   document.getElementById('bsForm').reset();
   document.getElementById('bs_date').value = new Date().toISOString().slice(0,10);
   bsOverlay.classList.add('show');
 });
+
+function openBsEntry(e){
+  currentBsEditId = e.id;
+  document.getElementById('bsModalTitle').textContent = 'Edit Transaction';
+  document.getElementById('bsDeleteBtn').style.display = 'inline-block';
+  document.getElementById('bs_date').value = e.entry_date;
+  document.getElementById('bs_particular').value = e.particular || '';
+  document.getElementById('bs_deposit').value = e.deposit > 0 ? e.deposit : '';
+  document.getElementById('bs_withdraw').value = e.withdraw > 0 ? e.withdraw : '';
+  bsOverlay.classList.add('show');
+}
 
 document.getElementById('bsSaveBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('bs_date').value;
@@ -531,13 +550,20 @@ document.getElementById('bsSaveBtn').addEventListener('click', async ()=>{
     return;
   }
 
-  const { error } = await supabase.from('bank_entries').insert({
+  const payload = {
     account: currentBsAccount,
     entry_date: date,
     particular: particular,
     deposit: deposit,
     withdraw: withdraw
-  });
+  };
+
+  let error;
+  if(currentBsEditId){
+    ({ error } = await supabase.from('bank_entries').update(payload).eq('id', currentBsEditId));
+  } else {
+    ({ error } = await supabase.from('bank_entries').insert(payload));
+  }
 
   if(error){
     alert('Could not save: ' + error.message);
@@ -546,6 +572,19 @@ document.getElementById('bsSaveBtn').addEventListener('click', async ()=>{
   bsOverlay.classList.remove('show');
   loadBankEntries();
 });
+
+document.getElementById('bsDeleteBtn').addEventListener('click', async ()=>{
+  if(!currentBsEditId) return;
+  if(!confirm('Delete this transaction permanently? This cannot be undone.')) return;
+  const { error } = await supabase.from('bank_entries').delete().eq('id', currentBsEditId);
+  if(error){
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  bsOverlay.classList.remove('show');
+  loadBankEntries();
+});
+
 
 /* ---------- Modal close handlers ---------- */
 document.querySelectorAll('[data-close]').forEach(btn=>{
