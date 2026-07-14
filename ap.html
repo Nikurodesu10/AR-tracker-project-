@@ -480,9 +480,9 @@ async function loadApEntries(){
     console.error(error);
     document.getElementById('connText').textContent = 'Connection error';
     document.getElementById('connDot').style.background = '#A23E2E';
-    return;
+  } else {
+    apEntries = data || [];
   }
-  apEntries = data || [];
   renderFolderSummaries();
   if(apContext) renderApLedger();
 }
@@ -707,6 +707,7 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- Init ---------- */
 function init(){
+  renderFolderSummaries(); // draw folders instantly with 0 balances, then fill in real numbers
   loadApEntries();
   setInterval(loadApEntries, 8000); // simple polling sync, same as BS/AR
 }
