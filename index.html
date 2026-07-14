@@ -74,6 +74,37 @@
   header.top .conn{font-size:11.5px; color:#B7C4CA; display:flex; align-items:center;}
   header.top .actions{display:flex; gap:10px; align-items:center;}
 
+  /* ---------- Hamburger + side nav ---------- */
+  .hamburger-btn{
+    appearance:none; border:none; background:transparent; cursor:pointer; padding:6px; margin-right:2px;
+    display:flex; flex-direction:column; gap:4px; justify-content:center;
+  }
+  .hamburger-btn span{width:20px; height:2px; background:var(--paper); display:block; border-radius:2px;}
+  .side-nav{
+    display:none; position:fixed; top:0; left:0; bottom:0; width:260px; background:var(--ink); z-index:80;
+    padding-top:70px; box-shadow:6px 0 24px rgba(0,0,0,.3);
+  }
+  .side-nav.show{display:block;}
+  .side-nav-item{
+    display:block; padding:14px 26px; color:#B7C4CA; font-size:14px; cursor:pointer; border-left:3px solid transparent;
+    text-decoration:none;
+  }
+  .side-nav-item:hover{background:rgba(255,255,255,.06); color:#fff;}
+  .side-nav-item.active{color:#fff; border-left-color:var(--amber); background:rgba(255,255,255,.08); font-weight:600;}
+  .nav-scrim{display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:70;}
+  .nav-scrim.show{display:block;}
+
+  /* ---------- Bank Statement folders ---------- */
+  .bs-folders{display:flex; gap:20px; flex-wrap:wrap; padding:20px 0;}
+  .bs-folder{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; padding:28px 34px;
+    text-align:center; cursor:pointer; min-width:180px; transition:box-shadow .15s, transform .15s;
+  }
+  .bs-folder:hover{box-shadow:0 10px 26px rgba(28,43,51,.12); transform:translateY(-2px);}
+  .bs-folder-icon{font-size:40px; margin-bottom:10px;}
+  .bs-folder-name{font-family:'Fraunces',serif; font-size:18px; font-weight:600;}
+  .bs-folder-sub{font-size:12px; color:var(--text-dim); margin-top:6px; font-family:'IBM Plex Mono',monospace;}
+
   main{max-width:1180px; margin:0 auto; padding:28px 32px 60px;}
 
   /* ---------- Dashboard cards ---------- */
@@ -214,8 +245,8 @@
 <!-- ================= LOGIN ================= -->
 <div id="loginScreen">
   <div class="login-card">
-    <h1>Ledger</h1>
-    <p>Accounts Receivable — staff access</p>
+    <h1>UND & JNH</h1>
+    <p>Record Book — staff access</p>
     <form id="loginForm">
       <div class="field">
         <label for="user">Username</label>
@@ -235,18 +266,27 @@
 <div id="app">
   <header class="top">
     <div class="brand">
-      <h1>Ledger</h1>
-      <span class="tag">Accounts Receivable</span>
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <h1 id="pageTitle">Ledger</h1>
+      <span class="tag" id="pageTag">Accounts Receivable</span>
     </div>
     <div class="actions">
       <span class="conn"><span class="status-dot" id="connDot"></span><span id="connText">Synced</span></span>
       <button class="btn secondary" id="exportBtn">Export CSV</button>
-      <button class="btn" id="newRecordBtn">+ New Entry</button>
       <button class="btn secondary" id="logoutBtn">Log out</button>
     </div>
   </header>
 
+  <nav class="side-nav" id="sideNav">
+    <a href="index.html" class="side-nav-item active">Accounts Receivable</a>
+    <a href="bs.html" class="side-nav-item">Bank Statement (BS)</a>
+  </nav>
+  <div class="nav-scrim" id="navScrim"></div>
+
   <main>
+    <div id="arView">
     <div class="cards">
       <div class="card total" data-mark="Σ">
         <div class="label">Total Ticketed</div>
@@ -287,6 +327,7 @@
         <select class="filter" id="monthFilter">
           <option value="all">All months</option>
         </select>
+        <button class="btn" id="newRecordBtn">+ New Entry</button>
       </div>
     </div>
 
@@ -311,6 +352,7 @@
         <p>Click "+ New Entry" to log the first receivable.</p>
       </div>
     </div>
+    </div><!-- /arView -->
   </main>
 </div>
 
@@ -1141,6 +1183,14 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   a.click();
   URL.revokeObjectURL(url);
 });
+
+/* ---------- Hamburger nav ---------- */
+const sideNav = document.getElementById('sideNav');
+const navScrim = document.getElementById('navScrim');
+function openNav(){ sideNav.classList.add('show'); navScrim.classList.add('show'); }
+function closeNav(){ sideNav.classList.remove('show'); navScrim.classList.remove('show'); }
+document.getElementById('hamburgerBtn').addEventListener('click', openNav);
+navScrim.addEventListener('click', closeNav);
 
 /* ---------- Init ---------- */
 function init(){
