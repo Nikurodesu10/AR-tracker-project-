@@ -272,8 +272,8 @@
 <!-- ================= LOGIN ================= -->
 <div id="loginScreen">
   <div class="login-card">
-    <h1>UND & JNH</h1>
-    <p>Record Book — staff access</p>
+    <h1>Ledger</h1>
+    <p>Accounts Receivable — staff access</p>
     <form id="loginForm">
       <div class="field">
         <label for="user">Username</label>
@@ -449,6 +449,7 @@
               <option value="Cebu Pacific">Cebu Pacific</option>
               <option value="Philippine Airlines">Philippine Airlines</option>
               <option value="Air Asia">Air Asia</option>
+              <option value="LGU">LGU</option>
               <option value="__other__">Other…</option>
             </select>
             <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
@@ -752,7 +753,7 @@ function getSelectedAirline(){
 function setAirlineField(value){
   const sel = document.getElementById('f_airline');
   const otherField = document.getElementById('f_airline_other');
-  const known = ['Cebu Pacific','Philippine Airlines','Air Asia'];
+  const known = ['Cebu Pacific','Philippine Airlines','Air Asia','LGU'];
   if(!value){
     sel.value = '';
     otherField.value = '';
