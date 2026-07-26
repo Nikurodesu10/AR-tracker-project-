@@ -325,6 +325,28 @@
 
   <main>
     <div id="arView">
+    <div id="arFolders" class="bs-folders">
+      <div class="bs-folder" data-folder="Other">
+        <div class="bs-folder-icon">📁</div>
+        <div class="bs-folder-name">Other</div>
+        <div class="bs-folder-sub" id="arFolderSubOther">—</div>
+      </div>
+      <div class="bs-folder" data-folder="LGU">
+        <div class="bs-folder-icon">📁</div>
+        <div class="bs-folder-name">LGU</div>
+        <div class="bs-folder-sub" id="arFolderSubLGU">—</div>
+      </div>
+    </div>
+
+    <div id="arFolderDetail" style="display:none;">
+    <div class="toolbar">
+      <div class="left">
+        <button class="btn secondary" id="arBackBtn">← Folders</button>
+        <h3 id="arFolderTitle" style="font-size:18px; margin-left:4px;"></h3>
+      </div>
+      <button class="btn secondary" id="printFolderBtn">Print Folder Statement</button>
+    </div>
+
     <div class="cards">
       <div class="card total" data-mark="Σ">
         <div class="label">Total Ticketed</div>
@@ -390,6 +412,7 @@
         <p>Click "+ New Entry" to log the first receivable.</p>
       </div>
     </div>
+    </div><!-- /arFolderDetail -->
     </div><!-- /arView -->
   </main>
 </div>
@@ -585,6 +608,7 @@ const supabase = createClient({
 
 let records = [];
 let currentDetailId = null;
+let currentFolder = null; // 'Other' or 'LGU' — which AR folder is currently open
 
 /* ---------- Auth gate ---------- */
 const loginScreen = document.getElementById('loginScreen');
@@ -692,25 +716,30 @@ function monthLabel(key){
   const d = new Date(Number(y), Number(m)-1, 1);
   return d.toLocaleDateString('en-US', {month:'long', year:'numeric'});
 }
+function folderRecords(){
+  return records.filter(r => r.folder === currentFolder);
+}
 function populateMonthFilter(){
   const sel = document.getElementById('monthFilter');
   const prev = sel.value;
-  const keys = [...new Set(records.map(r=>monthKey(r.entry_date)))].sort().reverse();
+  const keys = [...new Set(folderRecords().map(r=>monthKey(r.entry_date)))].sort().reverse();
   sel.innerHTML = '<option value="all">All months</option>' +
     keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
   if(keys.includes(prev)) sel.value = prev;
 }
 function populateCustomerList(){
   const dl = document.getElementById('customerNamesList');
-  const names = [...new Set(records.map(r=>r.customer_name))].sort();
+  const names = [...new Set(folderRecords().map(r=>r.customer_name))].sort();
   dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}">`).join('');
 }
 /* Finds an existing customer name that matches case/space-insensitively,
    so "dilian", "Dilian ", "DILIAN" all collapse into one stored name
-   instead of splitting into separate customer records. */
+   instead of splitting into separate customer records. Scoped to the
+   current folder — an "Other" account and an "LGU" account are always
+   kept separate even if they share a name. */
 function findExistingName(typed){
   const norm = typed.trim().toLowerCase();
-  const match = records.find(r => r.customer_name.trim().toLowerCase() === norm);
+  const match = folderRecords().find(r => r.customer_name.trim().toLowerCase() === norm);
   return match ? match.customer_name : typed.trim();
 }
 function nameWithPax(name, pax){
@@ -784,7 +813,8 @@ async function loadRecords(){
   records = data || [];
   populateMonthFilter();
   populateCustomerList();
-  renderAll();
+  updateArFolderSummaries();
+  if(currentFolder) renderAll();
 }
 
 function subscribeRealtime(){
@@ -794,6 +824,34 @@ function subscribeRealtime(){
   setInterval(loadRecords, 45000);
 }
 
+/* ---------- AR Folders (Other / LGU) ---------- */
+function updateArFolderSummaries(){
+  ['Other','LGU'].forEach(f=>{
+    const recs = records.filter(r=>r.folder === f);
+    const total = recs.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+    document.getElementById(`arFolderSub${f}`).textContent =
+      `${peso(total)} · ${recs.length} record${recs.length===1?'':'s'}`;
+  });
+}
+function showArFolders(){
+  currentFolder = null;
+  document.getElementById('arFolders').style.display = 'flex';
+  document.getElementById('arFolderDetail').style.display = 'none';
+}
+function showArFolderDetail(folder){
+  currentFolder = folder;
+  document.getElementById('arFolders').style.display = 'none';
+  document.getElementById('arFolderDetail').style.display = 'block';
+  document.getElementById('arFolderTitle').textContent = folder;
+  populateMonthFilter();
+  populateCustomerList();
+  renderAll();
+}
+document.querySelectorAll('#arFolders .bs-folder').forEach(card=>{
+  card.addEventListener('click', ()=> showArFolderDetail(card.getAttribute('data-folder')));
+});
+document.getElementById('arBackBtn').addEventListener('click', showArFolders);
+
 /* ---------- Rendering ---------- */
 function renderAll(){
   renderCards();
@@ -801,21 +859,22 @@ function renderAll(){
 }
 
 function renderCards(){
-  const total = records.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
-  const collected = records.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
-  const outstanding = records.reduce((s,r)=>s + Number(r.balance||0), 0);
-  const totalCapital = records.reduce((s,r)=>s + Number(r.capital||0), 0);
+  const recs = folderRecords();
+  const total = recs.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+  const collected = recs.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
+  const outstanding = recs.reduce((s,r)=>s + Number(r.balance||0), 0);
+  const totalCapital = recs.reduce((s,r)=>s + Number(r.capital||0), 0);
   const income = total - totalCapital;
 
   document.getElementById('cardTotal').textContent = peso(total);
-  document.getElementById('cardTotalSub').textContent = `${records.length} record${records.length===1?'':'s'}`;
+  document.getElementById('cardTotalSub').textContent = `${recs.length} record${recs.length===1?'':'s'}`;
 
   document.getElementById('cardCollected').textContent = peso(collected);
   const pct = total > 0 ? Math.round((collected/total)*100) : 0;
   document.getElementById('cardCollectedSub').textContent = `${pct}% of ticketed`;
 
   document.getElementById('cardOutstanding').textContent = peso(outstanding);
-  const openAccounts = records.filter(r=>r.balance > 0).length;
+  const openAccounts = recs.filter(r=>r.balance > 0).length;
   document.getElementById('cardOutstandingSub').textContent = `across ${openAccounts} account${openAccounts===1?'':'s'}`;
 
   document.getElementById('cardCapital').textContent = peso(totalCapital);
@@ -830,7 +889,7 @@ function renderTable(){
   const statusF = document.getElementById('statusFilter').value;
   const monthF = document.getElementById('monthFilter').value;
 
-  let rows = records.filter(r=>{
+  let rows = folderRecords().filter(r=>{
     if(search && !(r.customer_name.toLowerCase().includes(search) || r.record_no.toLowerCase().includes(search))) return false;
     if(statusF !== 'all' && r.status !== statusF) return false;
     if(monthF !== 'all' && monthKey(r.entry_date) !== monthF) return false;
@@ -1022,7 +1081,7 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     return;
   }
 
-  const existing = records.find(r => r.customer_name === name);
+  const existing = folderRecords().find(r => r.customer_name === name);
 
   if(existing){
     // Same account already has a record — just append this ticket to it
@@ -1041,6 +1100,7 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     ({ error } = await withRetry(() => supabase.from('ar_records').insert({
       entry_date: date,
       customer_name: name,
+      folder: currentFolder,
       ticket_history: [ticketEntry],
       capital: capitalContribution,
       remark: remark,
@@ -1338,9 +1398,13 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- CSV export ---------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if(!currentFolder){
+    alert('Open a folder (Other or LGU) first — CSV export is per-folder.');
+    return;
+  }
   const headers = ['Record No','Account Name','Passenger Name','Booking Date','Departure Date','Flight Route','Departure Time','Arrival Time','Airline','Pax','Ticket Amount (per pax)','Total','Capital (Total)','Amount Paid (Account Total)','Balance (Account Total)','Status','Remark'];
   const rows = [];
-  records.forEach(r=>{
+  folderRecords().forEach(r=>{
     const tickets = (r.ticket_history && r.ticket_history.length) ? r.ticket_history : [{date:r.entry_date, amount:r.ticket_amount}];
     tickets.forEach(t=>{
       rows.push([
@@ -1360,7 +1424,7 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `accounts_receivable_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `accounts_receivable_${currentFolder}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -1374,8 +1438,57 @@ document.getElementById('hamburgerBtn').addEventListener('click', openNav);
 document.getElementById('navCloseBtn').addEventListener('click', closeNav);
 navScrim.addEventListener('click', closeNav);
 
+document.getElementById('printFolderBtn').addEventListener('click', ()=>{
+  if(!currentFolder) return;
+  const recs = folderRecords().slice().sort((a,b)=> a.customer_name.localeCompare(b.customer_name));
+
+  const totalTicket = recs.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+  const totalPaid = recs.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
+  const totalBalance = recs.reduce((s,r)=>s + Number(r.balance||0), 0);
+
+  const rows = recs.length
+    ? recs.map(r=>`
+        <tr>
+          <td>${r.record_no}</td>
+          <td>${escapeHtml(r.customer_name)}</td>
+          <td style="text-align:right">${peso(r.ticket_amount)}</td>
+          <td style="text-align:right">${peso(r.amount_paid)}</td>
+          <td style="text-align:right">${peso(r.balance)}</td>
+          <td>${r.status}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="6">No accounts in this folder.</td></tr>';
+
+  document.getElementById('printStatement').innerHTML = `
+    <h1>UND Travel and Tours</h1>
+    <h3 style="margin-top:18px; font-size:15px; text-align:center;">${escapeHtml(currentFolder)} — Folder Statement</h3>
+    <table>
+      <thead><tr>
+        <th style="text-align:left">Record No</th>
+        <th style="text-align:left">Account Name</th>
+        <th style="text-align:right">Ticket Amount</th>
+        <th style="text-align:right">Paid</th>
+        <th style="text-align:right">Balance</th>
+        <th style="text-align:left">Status</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr class="totals">
+          <td colspan="2"><strong>Total</strong></td>
+          <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
+          <td style="text-align:right"><strong>${peso(totalPaid)}</strong></td>
+          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <p style="margin-top:30px; font-size:11px; color:#888;">Printed ${new Date().toLocaleDateString()}</p>
+  `;
+  window.print();
+});
+
 /* ---------- Init ---------- */
 function init(){
+  showArFolders();
   loadRecords();
   subscribeRealtime();
 }
