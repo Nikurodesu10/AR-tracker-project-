@@ -295,7 +295,7 @@
         <span></span><span></span><span></span>
       </button>
       <h1>UND & JNH</h1>
-      <span class="tag">Account Payable</span>
+      <span class="tag">Expenses</span>
     </div>
     <div class="actions">
       <span class="conn"><span class="status-dot" id="connDot"></span><span id="connText">Synced</span></span>
@@ -314,49 +314,25 @@
     <div class="side-nav-items">
       <a href="index.html" class="side-nav-item"><span class="icon">📋</span>Accounts Receivable</a>
       <a href="bs.html" class="side-nav-item"><span class="icon">🏦</span>Bank Statement (BS)</a>
-      <a href="ap.html" class="side-nav-item active"><span class="icon">💳</span>Account Payable (AP)</a>
+      <a href="ap.html" class="side-nav-item active"><span class="icon">💳</span>Expenses</a>
     </div>
     <div class="side-nav-foot">Signed in as Deilen75</div>
   </nav>
   <div class="nav-scrim" id="navScrim"></div>
 
   <main>
-    <!-- Level 1: Credit Card / Other Expenses -->
-    <div id="apTop" class="bs-folders">
-      <div class="bs-folder" data-section="Credit Card">
-        <div class="bs-folder-icon">💳</div>
-        <div class="bs-folder-name">Credit Card</div>
-        <div class="bs-folder-sub">8 cards</div>
+    <!-- Level 1: flat folder grid, dynamic (loaded from ap_folders) -->
+    <div id="apTop">
+      <div class="toolbar"><div class="left"></div>
+        <button class="btn" id="apAddFolderBtn">+ Add Folder</button>
       </div>
-      <div class="bs-folder" data-section="Other Expenses">
-        <div class="bs-folder-icon">🧾</div>
-        <div class="bs-folder-name">Other Expenses</div>
-        <div class="bs-folder-sub">Bills &amp; salary</div>
-      </div>
+      <div class="bs-folders" id="apTopGrid"></div>
     </div>
 
-    <!-- Level 2a: Credit Card list -->
-    <div id="apCcFolders" style="display:none;">
-      <div class="toolbar"><div class="left">
-        <button class="btn secondary" id="apCcBackBtn">← Account Payable</button>
-        <h3 style="font-size:18px; margin-left:4px;">Credit Card</h3>
-      </div></div>
-      <div class="bs-folders" id="apCcFoldersGrid"></div>
-    </div>
-
-    <!-- Level 2b: Other Expenses list -->
-    <div id="apOeFolders" style="display:none;">
-      <div class="toolbar"><div class="left">
-        <button class="btn secondary" id="apOeBackBtn">← Account Payable</button>
-        <h3 style="font-size:18px; margin-left:4px;">Other Expenses</h3>
-      </div></div>
-      <div class="bs-folders" id="apOeFoldersGrid"></div>
-    </div>
-
-    <!-- Level 3: Salary employees -->
+    <!-- Level 2: Salary employees -->
     <div id="apSalaryFolders" style="display:none;">
       <div class="toolbar"><div class="left">
-        <button class="btn secondary" id="apSalaryBackBtn">← Other Expenses</button>
+        <button class="btn secondary" id="apSalaryBackBtn">← Expenses</button>
         <h3 style="font-size:18px; margin-left:4px;">Salary</h3>
       </div></div>
       <div class="bs-folders" id="apSalaryFoldersGrid"></div>
@@ -390,6 +366,28 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- ================= ADD FOLDER MODAL ================= -->
+<div class="overlay" id="apFolderOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2>New Folder</h2></div>
+      <button class="modal-close" data-close="apFolderOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="apFolderForm">
+        <div class="field">
+          <label>Folder Name</label>
+          <input type="text" id="apFolderName" placeholder="e.g. Internet Bill" required>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="apFolderOverlay">Cancel</button>
+      <button class="btn" id="apSaveFolderBtn">Create Folder</button>
+    </div>
+  </div>
 </div>
 
 <!-- ================= AP ENTRY MODAL ================= -->
@@ -511,17 +509,33 @@ document.getElementById('navCloseBtn').addEventListener('click', closeNav);
 navScrim.addEventListener('click', closeNav);
 
 /* ============================================================
-   Account Payable structure
+   Expenses structure — folders are now dynamic (stored in
+   ap_folders), not a hardcoded list. "Salary" is the one folder
+   that still has its own sub-folders (Joan, Ernila) underneath it.
    ============================================================ */
-const CREDIT_CARDS = ['East West','BDO-JCB','Metro Bank','RCBC','Security Bank','BDO-Visa','BDO-Shopmore','Gold-Unionpay'];
-const OTHER_EXPENSES = ['Water Bill','Electric Bill','Wifi Bill','Rental','Smart','Salary','Others'];
 const SALARY_PEOPLE = ['Joan','Ernila'];
 
+let apFolders = [];   // rows from ap_folders: { id, name }
 let apEntries = [];
-// current ledger context: { category: 'Credit Card'|'Other Expenses', folder: string, person: string|null }
+// current ledger context: { folder: string, person: string|null }
 let apContext = null;
 // which folder-list view to return to when leaving the ledger
 let apBackTarget = 'top';
+
+async function loadApFolders(){
+  const { data, error } = await supabase
+    .from('ap_folders')
+    .select('*')
+    .order('created_at', {ascending:true});
+  if(error){
+    console.error(error);
+    document.getElementById('connText').textContent = 'Connection error';
+    document.getElementById('connDot').style.background = '#A23E2E';
+    return;
+  }
+  apFolders = data || [];
+  renderFolderSummaries();
+}
 
 async function loadApEntries(){
   const { data, error } = await supabase
@@ -540,19 +554,18 @@ async function loadApEntries(){
   if(apContext) renderApLedger();
 }
 
-function entriesFor(category, folder, person){
+function entriesFor(folder, person){
   return apEntries.filter(e =>
-    e.category === category &&
     e.folder === folder &&
     (person ? e.person === person : (!e.person))
   );
 }
-function balanceFor(category, folder, person){
-  return entriesFor(category, folder, person).reduce((s,e)=> s + Number(e.amount||0), 0);
+function balanceFor(folder, person){
+  return entriesFor(folder, person).reduce((s,e)=> s + Number(e.amount||0), 0);
 }
 
 function hideAllApViews(){
-  ['apTop','apCcFolders','apOeFolders','apSalaryFolders','apLedgerView'].forEach(id=>{
+  ['apTop','apSalaryFolders','apLedgerView'].forEach(id=>{
     document.getElementById(id).style.display = 'none';
   });
 }
@@ -560,7 +573,7 @@ function hideAllApViews(){
 function showApTop(){
   apContext = null;
   hideAllApViews();
-  document.getElementById('apTop').style.display = 'flex';
+  document.getElementById('apTop').style.display = 'block';
 }
 
 function buildFolderCard(label, sub, onClick){
@@ -576,24 +589,16 @@ function buildFolderCard(label, sub, onClick){
 }
 
 function renderFolderSummaries(){
-  // Credit Card grid
-  const ccGrid = document.getElementById('apCcFoldersGrid');
-  ccGrid.innerHTML = '';
-  CREDIT_CARDS.forEach(card=>{
-    const bal = balanceFor('Credit Card', card, null);
-    ccGrid.appendChild(buildFolderCard(card, peso(bal), ()=> openApLedger('Credit Card', card, null, 'ccFolders')));
-  });
-
-  // Other Expenses grid
-  const oeGrid = document.getElementById('apOeFoldersGrid');
-  oeGrid.innerHTML = '';
-  OTHER_EXPENSES.forEach(item=>{
-    if(item === 'Salary'){
-      const total = SALARY_PEOPLE.reduce((s,p)=> s + balanceFor('Other Expenses','Salary',p), 0);
-      oeGrid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders));
+  // Top-level, flat folder grid — one card per row in ap_folders
+  const grid = document.getElementById('apTopGrid');
+  grid.innerHTML = '';
+  apFolders.forEach(f=>{
+    if(f.name === 'Salary'){
+      const total = SALARY_PEOPLE.reduce((s,p)=> s + balanceFor('Salary', p), 0);
+      grid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders));
     } else {
-      const bal = balanceFor('Other Expenses', item, null);
-      oeGrid.appendChild(buildFolderCard(item, peso(bal), ()=> openApLedger('Other Expenses', item, null, 'oeFolders')));
+      const bal = balanceFor(f.name, null);
+      grid.appendChild(buildFolderCard(f.name, peso(bal), ()=> openApLedger(f.name, null, 'top')));
     }
   });
 
@@ -601,37 +606,28 @@ function renderFolderSummaries(){
   const salGrid = document.getElementById('apSalaryFoldersGrid');
   salGrid.innerHTML = '';
   SALARY_PEOPLE.forEach(person=>{
-    const bal = balanceFor('Other Expenses', 'Salary', person);
-    salGrid.appendChild(buildFolderCard(person, peso(bal), ()=> openApLedger('Other Expenses', 'Salary', person, 'salaryFolders')));
+    const bal = balanceFor('Salary', person);
+    salGrid.appendChild(buildFolderCard(person, peso(bal), ()=> openApLedger('Salary', person, 'salaryFolders')));
   });
 }
 
-function showCcFolders(){
-  hideAllApViews();
-  document.getElementById('apCcFolders').style.display = 'block';
-}
-function showOeFolders(){
-  hideAllApViews();
-  document.getElementById('apOeFolders').style.display = 'block';
-}
 function showSalaryFolders(){
   hideAllApViews();
   document.getElementById('apSalaryFolders').style.display = 'block';
 }
 
-function openApLedger(category, folder, person, backTarget){
-  apContext = { category, folder, person };
+function openApLedger(folder, person, backTarget){
+  apContext = { folder, person };
   apBackTarget = backTarget;
   hideAllApViews();
   document.getElementById('apLedgerView').style.display = 'block';
-  const title = person ? `${folder} — ${person}` : (category === 'Credit Card' ? folder : folder);
-  document.getElementById('apLedgerTitle').textContent = title;
+  document.getElementById('apLedgerTitle').textContent = person ? `${folder} — ${person}` : folder;
   renderApLedger();
 }
 
 function renderApLedger(){
-  const { category, folder, person } = apContext;
-  const entries = entriesFor(category, folder, person);
+  const { folder, person } = apContext;
+  const entries = entriesFor(folder, person);
   const tbody = document.getElementById('apTableBody');
   const empty = document.getElementById('apEmptyState');
   tbody.innerHTML = '';
@@ -660,22 +656,35 @@ function renderApLedger(){
   });
 }
 
-document.getElementById('apCcBackBtn').addEventListener('click', showApTop);
-document.getElementById('apOeBackBtn').addEventListener('click', showApTop);
-document.getElementById('apSalaryBackBtn').addEventListener('click', showOeFolders);
+document.getElementById('apSalaryBackBtn').addEventListener('click', showApTop);
 document.getElementById('apLedgerBackBtn').addEventListener('click', ()=>{
-  if(apBackTarget === 'ccFolders') showCcFolders();
-  else if(apBackTarget === 'oeFolders') showOeFolders();
-  else if(apBackTarget === 'salaryFolders') showSalaryFolders();
+  if(apBackTarget === 'salaryFolders') showSalaryFolders();
   else showApTop();
 });
 
-document.querySelectorAll('#apTop .bs-folder').forEach(card=>{
-  card.addEventListener('click', ()=>{
-    const section = card.getAttribute('data-section');
-    if(section === 'Credit Card') showCcFolders();
-    else showOeFolders();
-  });
+/* ---------- Add Folder ---------- */
+const apFolderOverlay = document.getElementById('apFolderOverlay');
+document.getElementById('apAddFolderBtn').addEventListener('click', ()=>{
+  document.getElementById('apFolderForm').reset();
+  apFolderOverlay.classList.add('show');
+});
+document.getElementById('apSaveFolderBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('apFolderName').value.trim();
+  if(!name){
+    alert('Enter a folder name.');
+    return;
+  }
+  if(apFolders.some(f => f.name.toLowerCase() === name.toLowerCase())){
+    alert('A folder with that name already exists.');
+    return;
+  }
+  const { error } = await withRetry(() => supabase.from('ap_folders').insert({ name }));
+  if(error){
+    alert('Could not create folder: ' + error.message);
+    return;
+  }
+  apFolderOverlay.classList.remove('show');
+  loadApFolders();
 });
 
 /* ---------- Entry modal (add / edit / delete) ---------- */
@@ -711,9 +720,9 @@ document.getElementById('apSaveBtn').addEventListener('click', async ()=>{
     return;
   }
 
-  const { category, folder, person } = apContext;
+  const { folder, person } = apContext;
   const payload = {
-    category, folder, person,
+    folder, person,
     entry_date: date,
     particular: particular,
     amount: amount
@@ -760,9 +769,9 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 
 /* ---------- Init ---------- */
 function init(){
-  renderFolderSummaries(); // draw folders instantly with 0 balances, then fill in real numbers
+  loadApFolders();
   loadApEntries();
-  setInterval(loadApEntries, 45000); // simple polling sync, same as BS/AR
+  setInterval(()=>{ loadApFolders(); loadApEntries(); }, 45000); // simple polling sync, same as BS/AR
 }
 
 checkSession();
