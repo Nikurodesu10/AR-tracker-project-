@@ -316,7 +316,6 @@
     </div>
     <div class="side-nav-items">
       <a href="index.html" class="side-nav-item active"><span class="icon">📋</span>Accounts Receivable</a>
-      <a href="bs.html" class="side-nav-item"><span class="icon">🏦</span>Bank Statement (BS)</a>
       <a href="ap.html" class="side-nav-item"><span class="icon">💳</span>Expenses</a>
     </div>
     <div class="side-nav-foot">Signed in as Deilen75</div>
@@ -571,6 +570,9 @@
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
       <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
+      <select class="filter" id="d_printMonth" style="margin-right:-4px;">
+        <option value="all">All time</option>
+      </select>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
@@ -1203,6 +1205,21 @@ function openDetail(id){
   document.getElementById('p_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('p_amount').value = '';
 
+  // Populate the "which month to print" dropdown from every booking date
+  // across this customer's ticket(s) — same accounts print() already combines.
+  const custRecordsForMonths = records.filter(x => x.customer_name === r.customer_name);
+  const bookedMonths = new Set();
+  custRecordsForMonths.forEach(rec=>{
+    (rec.ticket_history || []).forEach(t=>{
+      const d = t.booking_date || t.date;
+      if(d) bookedMonths.add(monthKey(d));
+    });
+  });
+  const monthSel = document.getElementById('d_printMonth');
+  const sortedMonths = [...bookedMonths].sort().reverse();
+  monthSel.innerHTML = '<option value="all">All time</option>' +
+    sortedMonths.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
+
   detailOverlay.classList.add('show');
 }
 
@@ -1267,16 +1284,38 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   // record, but normally there's just one row per customer now.
   const custRecords = records.filter(r => r.customer_name === current.customer_name);
 
-  const totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
-  const totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
-  const totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
+  const selectedMonth = document.getElementById('d_printMonth').value; // 'all' or 'YYYY-MM'
 
   // Every individual ticket ever added for this customer, oldest first
-  const allTickets = [];
+  let allTickets = [];
   custRecords.forEach(r=>{
     (r.ticket_history || []).forEach(t=> allTickets.push(t));
   });
   allTickets.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+
+  // Combined payment history across this customer's record(s)
+  let allPayments = [];
+  custRecords.forEach(r=>{
+    (r.payment_history || []).forEach(p=> allPayments.push(p));
+  });
+  allPayments.sort((a,b)=> a.date.localeCompare(b.date));
+
+  let totalTicket, totalPaid, totalBalance;
+  if(selectedMonth === 'all'){
+    // Full account history — use the account's real running totals.
+    totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
+    totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
+    totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
+  } else {
+    // A single month's snapshot — filter both tickets and payments down
+    // to that month, and total just what happened in it.
+    allTickets = allTickets.filter(t => monthKey(t.booking_date || t.date) === selectedMonth);
+    allPayments = allPayments.filter(p => monthKey(p.date) === selectedMonth);
+    totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0);
+    totalPaid = allPayments.reduce((s,p)=> s + Number(p.amount||0), 0);
+    totalBalance = totalTicket - totalPaid;
+  }
+
   const ticketRows = allTickets.length
     ? allTickets.map(t=>{
         const rate = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / (Number(t.pax)||1));
@@ -1293,23 +1332,20 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right">${peso(t.amount)}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="9">No tickets recorded.</td></tr>';
+    : '<tr><td colspan="9">No tickets recorded' + (selectedMonth==='all' ? '.' : ' for this month.') + '</td></tr>';
 
-  // Combined payment history across this customer's record(s)
-  const allPayments = [];
-  custRecords.forEach(r=>{
-    (r.payment_history || []).forEach(p=> allPayments.push(p));
-  });
-  allPayments.sort((a,b)=> a.date.localeCompare(b.date));
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="2">No payments recorded.</td></tr>';
+    : '<tr><td colspan="2">No payments recorded' + (selectedMonth==='all' ? '.' : ' for this month.') + '</td></tr>';
+
+  const periodLabel = selectedMonth === 'all' ? 'Statement of Account' : `Statement of Account — ${monthLabel(selectedMonth)}`;
+  const balanceLabel = selectedMonth === 'all' ? 'Balance' : 'Net for the Month';
 
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
     <h2 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 18px; text-align:center;">${escapeHtml(current.customer_name)}</h2>
 
-    <h3 style="margin-top:18px; font-size:15px; text-align:center;">Statement of Account</h3>
+    <h3 style="margin-top:18px; font-size:15px; text-align:center;">${periodLabel}</h3>
     <table>
       <thead><tr>
         <th style="text-align:left">Booking Date</th>
@@ -1329,11 +1365,11 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td colspan="8">Paid to Date</td>
+          <td colspan="8">Paid${selectedMonth==='all' ? ' to Date' : ' this Month'}</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
-          <td colspan="8"><strong>Balance</strong></td>
+          <td colspan="8"><strong>${balanceLabel}</strong></td>
           <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
       </tfoot>
