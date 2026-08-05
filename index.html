@@ -566,13 +566,15 @@
 
       <div class="section-label">Remark</div>
       <textarea id="d_remark"></textarea>
+      <div class="section-label">Print Statement For</div>
+      <select id="d_printMonth" multiple size="4" style="width:100%; padding:8px; border:1px solid var(--line-strong); border-radius:3px; font-size:13px; font-family:'Inter',sans-serif; background:var(--paper-raised);">
+        <option value="all" selected>All time</option>
+      </select>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:5px;">Hold Ctrl (⌘ on Mac) and click to pick more than one month — e.g. July + August in one PDF.</div>
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
       <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
-      <select class="filter" id="d_printMonth" style="margin-right:-4px;">
-        <option value="all">All time</option>
-      </select>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
@@ -1217,7 +1219,7 @@ function openDetail(id){
   });
   const monthSel = document.getElementById('d_printMonth');
   const sortedMonths = [...bookedMonths].sort().reverse();
-  monthSel.innerHTML = '<option value="all">All time</option>' +
+  monthSel.innerHTML = '<option value="all" selected>All time</option>' +
     sortedMonths.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
 
   detailOverlay.classList.add('show');
@@ -1284,7 +1286,9 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   // record, but normally there's just one row per customer now.
   const custRecords = records.filter(r => r.customer_name === current.customer_name);
 
-  const selectedMonth = document.getElementById('d_printMonth').value; // 'all' or 'YYYY-MM'
+  // Read every month the staff selected — could be 'all', one month, or several
+  const selectedOptions = Array.from(document.getElementById('d_printMonth').selectedOptions).map(o=>o.value);
+  const selectedMonths = selectedOptions.includes('all') || selectedOptions.length === 0 ? 'all' : selectedOptions;
 
   // Every individual ticket ever added for this customer, oldest first
   let allTickets = [];
@@ -1301,16 +1305,16 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   allPayments.sort((a,b)=> a.date.localeCompare(b.date));
 
   let totalTicket, totalPaid, totalBalance;
-  if(selectedMonth === 'all'){
+  if(selectedMonths === 'all'){
     // Full account history — use the account's real running totals.
     totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
     totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
     totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
   } else {
-    // A single month's snapshot — filter both tickets and payments down
-    // to that month, and total just what happened in it.
-    allTickets = allTickets.filter(t => monthKey(t.booking_date || t.date) === selectedMonth);
-    allPayments = allPayments.filter(p => monthKey(p.date) === selectedMonth);
+    // A snapshot of one or more selected months — filter both tickets and
+    // payments down to just those months, and total what happened in them.
+    allTickets = allTickets.filter(t => selectedMonths.includes(monthKey(t.booking_date || t.date)));
+    allPayments = allPayments.filter(p => selectedMonths.includes(monthKey(p.date)));
     totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0);
     totalPaid = allPayments.reduce((s,p)=> s + Number(p.amount||0), 0);
     totalBalance = totalTicket - totalPaid;
@@ -1332,14 +1336,15 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right">${peso(t.amount)}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="9">No tickets recorded' + (selectedMonth==='all' ? '.' : ' for this month.') + '</td></tr>';
+    : '<tr><td colspan="9">No tickets recorded' + (selectedMonths==='all' ? '.' : ' for the selected month(s).') + '</td></tr>';
 
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="2">No payments recorded' + (selectedMonth==='all' ? '.' : ' for this month.') + '</td></tr>';
+    : '<tr><td colspan="2">No payments recorded' + (selectedMonths==='all' ? '.' : ' for the selected month(s).') + '</td></tr>';
 
-  const periodLabel = selectedMonth === 'all' ? 'Statement of Account' : `Statement of Account — ${monthLabel(selectedMonth)}`;
-  const balanceLabel = selectedMonth === 'all' ? 'Balance' : 'Net for the Month';
+  const monthsLabel = selectedMonths === 'all' ? '' : selectedMonths.slice().sort().map(monthLabel).join(' & ');
+  const periodLabel = selectedMonths === 'all' ? 'Statement of Account' : `Statement of Account — ${monthsLabel}`;
+  const balanceLabel = selectedMonths === 'all' ? 'Balance' : 'Net for the Period';
 
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
@@ -1365,7 +1370,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td colspan="8">Paid${selectedMonth==='all' ? ' to Date' : ' this Month'}</td>
+          <td colspan="8">Paid${selectedMonths==='all' ? ' to Date' : ' this Period'}</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
