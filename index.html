@@ -582,7 +582,17 @@
       <div class="section-label">Remark</div>
       <textarea id="d_remark"></textarea>
       <div class="section-label">Print Statement For</div>
-      <div id="d_printMonthList" class="month-check-list"></div>
+      <div class="grid2">
+        <div class="field">
+          <label>From <span style="font-weight:400; color:var(--text-dim);">(leave blank for earliest)</span></label>
+          <input type="date" id="d_printFrom">
+        </div>
+        <div class="field">
+          <label>To <span style="font-weight:400; color:var(--text-dim);">(leave blank for today)</span></label>
+          <input type="date" id="d_printTo">
+        </div>
+      </div>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:-6px;">Leave both blank to print the full account history.</div>
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
@@ -1219,46 +1229,10 @@ function openDetail(id){
   document.getElementById('p_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('p_amount').value = '';
 
-  // Populate the "which month to print" checklist from every booking date
-  // across this customer's ticket(s) — same accounts print() already combines.
-  const custRecordsForMonths = records.filter(x => x.customer_name === r.customer_name);
-  const bookedMonths = new Set();
-  custRecordsForMonths.forEach(rec=>{
-    (rec.ticket_history || []).forEach(t=>{
-      const d = t.booking_date || t.date;
-      if(d) bookedMonths.add(monthKey(d));
-    });
-  });
-  const monthListEl = document.getElementById('d_printMonthList');
-  const sortedMonths = [...bookedMonths].sort().reverse();
-  monthListEl.innerHTML = `
-    <label class="month-check-item all-time">
-      <input type="checkbox" class="printMonthCheck" value="all" checked> All time
-    </label>
-    ${sortedMonths.map(k=>`
-    <label class="month-check-item">
-      <input type="checkbox" class="printMonthCheck" value="${k}"> ${monthLabel(k)}
-    </label>`).join('')}
-  `;
-  // Picking "All time" clears specific months, and picking any specific
-  // month clears "All time" — they're mutually exclusive, but multiple
-  // specific months can be checked together (e.g. July + August).
-  monthListEl.querySelectorAll('.printMonthCheck').forEach(cb=>{
-    cb.addEventListener('change', ()=>{
-      const all = monthListEl.querySelector('.printMonthCheck[value="all"]');
-      if(cb.value === 'all' && cb.checked){
-        monthListEl.querySelectorAll('.printMonthCheck').forEach(other=>{
-          if(other !== cb) other.checked = false;
-        });
-      } else if(cb.value !== 'all' && cb.checked){
-        all.checked = false;
-      }
-      // If nothing at all is checked, fall back to "All time" so a
-      // statement can always be printed.
-      const anyChecked = Array.from(monthListEl.querySelectorAll('.printMonthCheck')).some(c=>c.checked);
-      if(!anyChecked) all.checked = true;
-    });
-  });
+  // Reset the print date range each time the popup opens — blank means
+  // "full history" by default.
+  document.getElementById('d_printFrom').value = '';
+  document.getElementById('d_printTo').value = '';
 
   detailOverlay.classList.add('show');
 }
@@ -1324,10 +1298,11 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   // record, but normally there's just one row per customer now.
   const custRecords = records.filter(r => r.customer_name === current.customer_name);
 
-  // Read every month the staff selected — could be 'all', one month, or several
-  // Read every month the staff checked — could be 'all', one month, or several
-  const selectedOptions = Array.from(document.querySelectorAll('.printMonthCheck:checked')).map(cb=>cb.value);
-  const selectedMonths = selectedOptions.includes('all') || selectedOptions.length === 0 ? 'all' : selectedOptions;
+  // Read the From/To date range — either can be blank, meaning "no limit"
+  // on that side.
+  const fromDate = document.getElementById('d_printFrom').value; // '' or 'YYYY-MM-DD'
+  const toDate = document.getElementById('d_printTo').value;     // '' or 'YYYY-MM-DD'
+  const hasRange = !!(fromDate || toDate);
 
   // Every individual ticket ever added for this customer, oldest first
   let allTickets = [];
@@ -1344,16 +1319,17 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   allPayments.sort((a,b)=> a.date.localeCompare(b.date));
 
   let totalTicket, totalPaid, totalBalance;
-  if(selectedMonths === 'all'){
+  if(!hasRange){
     // Full account history — use the account's real running totals.
     totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
     totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
     totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
   } else {
-    // A snapshot of one or more selected months — filter both tickets and
-    // payments down to just those months, and total what happened in them.
-    allTickets = allTickets.filter(t => selectedMonths.includes(monthKey(t.booking_date || t.date)));
-    allPayments = allPayments.filter(p => selectedMonths.includes(monthKey(p.date)));
+    // A snapshot of a specific date range — filter both tickets and
+    // payments to it, and total what happened within those days.
+    const inRange = d => (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+    allTickets = allTickets.filter(t => inRange(t.booking_date || t.date));
+    allPayments = allPayments.filter(p => inRange(p.date));
     totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0);
     totalPaid = allPayments.reduce((s,p)=> s + Number(p.amount||0), 0);
     totalBalance = totalTicket - totalPaid;
@@ -1375,15 +1351,19 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right">${peso(t.amount)}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="9">No tickets recorded' + (selectedMonths==='all' ? '.' : ' for the selected month(s).') + '</td></tr>';
+    : '<tr><td colspan="9">No tickets recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
 
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
-    : '<tr><td colspan="2">No payments recorded' + (selectedMonths==='all' ? '.' : ' for the selected month(s).') + '</td></tr>';
+    : '<tr><td colspan="2">No payments recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
 
-  const monthsLabel = selectedMonths === 'all' ? '' : selectedMonths.slice().sort().map(monthLabel).join(' & ');
-  const periodLabel = selectedMonths === 'all' ? 'Statement of Account' : `Statement of Account — ${monthsLabel}`;
-  const balanceLabel = selectedMonths === 'all' ? 'Balance' : 'Net for the Period';
+  const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+  const rangeLabel = fromDate && toDate ? `${fmtDate(fromDate)} – ${fmtDate(toDate)}`
+    : fromDate ? `From ${fmtDate(fromDate)}`
+    : toDate ? `Through ${fmtDate(toDate)}`
+    : '';
+  const periodLabel = !hasRange ? 'Statement of Account' : `Statement of Account — ${rangeLabel}`;
+  const balanceLabel = !hasRange ? 'Balance' : 'Net for the Period';
 
   document.getElementById('printStatement').innerHTML = `
     <h1>UND Travel and Tours</h1>
@@ -1409,7 +1389,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td colspan="8">Paid${selectedMonths==='all' ? ' to Date' : ' this Period'}</td>
+          <td colspan="8">Paid${!hasRange ? ' to Date' : ' this Period'}</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
