@@ -253,6 +253,21 @@
   }
 
   .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:18px 0 8px; font-weight:600;}
+
+  /* ---------- Print month checkbox list ---------- */
+  .month-check-list{
+    display:flex; flex-direction:column; gap:2px; max-height:160px; overflow-y:auto;
+    border:1px solid var(--line-strong); border-radius:4px; padding:6px; background:var(--paper-raised);
+  }
+  .month-check-item{
+    display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:3px; cursor:pointer;
+    font-size:13px; transition:background .12s;
+  }
+  .month-check-item:hover{background:var(--paper);}
+  .month-check-item input[type=checkbox]{
+    width:17px; height:17px; accent-color:var(--ink); cursor:pointer; flex-shrink:0;
+  }
+  .month-check-item.all-time{border-bottom:1px solid var(--line); margin-bottom:2px; padding-bottom:9px; font-weight:600;}
   .section-label:first-child{margin-top:0;}
 
   @media(max-width:760px){
@@ -567,10 +582,7 @@
       <div class="section-label">Remark</div>
       <textarea id="d_remark"></textarea>
       <div class="section-label">Print Statement For</div>
-      <select id="d_printMonth" multiple size="4" style="width:100%; padding:8px; border:1px solid var(--line-strong); border-radius:3px; font-size:13px; font-family:'Inter',sans-serif; background:var(--paper-raised);">
-        <option value="all" selected>All time</option>
-      </select>
-      <div style="font-size:11px; color:var(--text-dim); margin-top:5px;">Hold Ctrl (⌘ on Mac) and click to pick more than one month — e.g. July + August in one PDF.</div>
+      <div id="d_printMonthList" class="month-check-list"></div>
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
@@ -1207,7 +1219,7 @@ function openDetail(id){
   document.getElementById('p_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('p_amount').value = '';
 
-  // Populate the "which month to print" dropdown from every booking date
+  // Populate the "which month to print" checklist from every booking date
   // across this customer's ticket(s) — same accounts print() already combines.
   const custRecordsForMonths = records.filter(x => x.customer_name === r.customer_name);
   const bookedMonths = new Set();
@@ -1217,10 +1229,36 @@ function openDetail(id){
       if(d) bookedMonths.add(monthKey(d));
     });
   });
-  const monthSel = document.getElementById('d_printMonth');
+  const monthListEl = document.getElementById('d_printMonthList');
   const sortedMonths = [...bookedMonths].sort().reverse();
-  monthSel.innerHTML = '<option value="all" selected>All time</option>' +
-    sortedMonths.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
+  monthListEl.innerHTML = `
+    <label class="month-check-item all-time">
+      <input type="checkbox" class="printMonthCheck" value="all" checked> All time
+    </label>
+    ${sortedMonths.map(k=>`
+    <label class="month-check-item">
+      <input type="checkbox" class="printMonthCheck" value="${k}"> ${monthLabel(k)}
+    </label>`).join('')}
+  `;
+  // Picking "All time" clears specific months, and picking any specific
+  // month clears "All time" — they're mutually exclusive, but multiple
+  // specific months can be checked together (e.g. July + August).
+  monthListEl.querySelectorAll('.printMonthCheck').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const all = monthListEl.querySelector('.printMonthCheck[value="all"]');
+      if(cb.value === 'all' && cb.checked){
+        monthListEl.querySelectorAll('.printMonthCheck').forEach(other=>{
+          if(other !== cb) other.checked = false;
+        });
+      } else if(cb.value !== 'all' && cb.checked){
+        all.checked = false;
+      }
+      // If nothing at all is checked, fall back to "All time" so a
+      // statement can always be printed.
+      const anyChecked = Array.from(monthListEl.querySelectorAll('.printMonthCheck')).some(c=>c.checked);
+      if(!anyChecked) all.checked = true;
+    });
+  });
 
   detailOverlay.classList.add('show');
 }
@@ -1287,7 +1325,8 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const custRecords = records.filter(r => r.customer_name === current.customer_name);
 
   // Read every month the staff selected — could be 'all', one month, or several
-  const selectedOptions = Array.from(document.getElementById('d_printMonth').selectedOptions).map(o=>o.value);
+  // Read every month the staff checked — could be 'all', one month, or several
+  const selectedOptions = Array.from(document.querySelectorAll('.printMonthCheck:checked')).map(cb=>cb.value);
   const selectedMonths = selectedOptions.includes('all') || selectedOptions.length === 0 ? 'all' : selectedOptions;
 
   // Every individual ticket ever added for this customer, oldest first
