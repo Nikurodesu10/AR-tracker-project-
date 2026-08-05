@@ -225,6 +225,8 @@
   .hist-list{list-style:none; margin:0; padding:0;}
   .hist-list li{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px dashed var(--line);}
   #d_tickets li{cursor:pointer; padding:10px 8px 10px 8px; margin:0 -8px; border-radius:4px; border-left:3px solid transparent; transition:background .12s, border-color .12s;}
+  #d_history li{cursor:pointer; padding:10px 8px 10px 8px; margin:0 -8px; border-radius:4px; border-left:3px solid transparent; transition:background .12s, border-color .12s;}
+  #d_history li:hover{background:#FFFFFF; border-left-color:var(--amber); box-shadow:0 1px 4px rgba(28,43,51,.1);}
   #d_tickets li:hover{background:#FFFFFF; border-left-color:var(--amber); box-shadow:0 1px 4px rgba(28,43,51,.1);}
   .hist-list li:last-child{border-bottom:none;}
   .hist-list .hd{font-size:12.5px; color:var(--text-dim);}
@@ -599,6 +601,35 @@
       <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT PAYMENT MODAL ================= -->
+<div class="overlay" id="paymentOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2>Edit Payment</h2></div>
+      <button class="modal-close" data-close="paymentOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="paymentEditForm">
+        <div class="grid2">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="pe_date" required>
+          </div>
+          <div class="field">
+            <label>Amount</label>
+            <input type="number" id="pe_amount" step="0.01" min="0" required>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="deletePaymentBtn">Delete Payment</button>
+      <button class="btn secondary" data-close="paymentOverlay">Cancel</button>
+      <button class="btn" id="savePaymentBtn">Save</button>
     </div>
   </div>
 </div>
@@ -1219,8 +1250,11 @@ function openDetail(id){
   if(hist.length === 0){
     histEl.innerHTML = '<div class="hist-empty">No payments recorded yet.</div>';
   } else {
-    hist.slice().reverse().forEach(p=>{
+    const indexedHist = hist.map((p, i) => ({p, i}));
+    indexedHist.slice().reverse().forEach(({p, i})=>{
       const li = document.createElement('li');
+      li.title = 'Click to edit this payment';
+      li.addEventListener('click', ()=> openEditPayment(r.id, i));
       li.innerHTML = `<span class="hd">${p.date}</span><span class="ha">+ ${peso(p.amount)}</span>`;
       histEl.appendChild(li);
     });
@@ -1260,6 +1294,77 @@ document.getElementById('addPaymentBtn').addEventListener('click', async ()=>{
   }
   await loadRecords();
   openDetail(currentDetailId);
+});
+
+/* ---------- Edit / delete an individual payment ---------- */
+const paymentOverlay = document.getElementById('paymentOverlay');
+let editingPayment = null; // { recordId, index }
+
+function openEditPayment(recordId, index){
+  const r = records.find(x=>x.id === recordId);
+  if(!r) return;
+  const p = (r.payment_history || [])[index];
+  if(!p) return;
+
+  editingPayment = { recordId, index };
+  document.getElementById('pe_date').value = p.date || '';
+  document.getElementById('pe_amount').value = p.amount || '';
+  paymentOverlay.classList.add('show');
+}
+
+document.getElementById('savePaymentBtn').addEventListener('click', async ()=>{
+  if(!editingPayment) return;
+  const date = document.getElementById('pe_date').value;
+  const amount = parseFloat(document.getElementById('pe_amount').value);
+
+  if(!date || isNaN(amount) || amount <= 0){
+    alert('Enter a valid payment date and amount.');
+    return;
+  }
+
+  const record = records.find(r => r.id === editingPayment.recordId);
+  if(!record){ alert('Could not find that record.'); return; }
+  const newHistory = [...(record.payment_history || [])];
+  newHistory[editingPayment.index] = { date, amount };
+
+  const { error } = await withRetry(() => supabase
+    .from('ar_records')
+    .update({ payment_history: newHistory })
+    .eq('id', record.id));
+
+  if(error){
+    alert('Could not save: ' + error.message);
+    return;
+  }
+  paymentOverlay.classList.remove('show');
+  const recordId = editingPayment.recordId;
+  editingPayment = null;
+  await loadRecords();
+  openDetail(recordId);
+});
+
+document.getElementById('deletePaymentBtn').addEventListener('click', async ()=>{
+  if(!editingPayment) return;
+  if(!confirm('Delete this payment permanently? This cannot be undone.')) return;
+
+  const record = records.find(r => r.id === editingPayment.recordId);
+  if(!record) return;
+  const newHistory = (record.payment_history || []).filter((_, i) => i !== editingPayment.index);
+
+  const { error } = await withRetry(() => supabase
+    .from('ar_records')
+    .update({ payment_history: newHistory })
+    .eq('id', record.id));
+
+  if(error){
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  paymentOverlay.classList.remove('show');
+  const recordId = editingPayment.recordId;
+  editingPayment = null;
+  await loadRecords();
+  openDetail(recordId);
 });
 
 document.getElementById('addTicketBtn').addEventListener('click', ()=>{
@@ -1416,8 +1521,60 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   Promise.all(imgs.map(img => img.complete
     ? Promise.resolve()
     : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
-  )).then(()=> window.print());
+  )).then(async ()=> {
+    window.print();
+
+    // Only for a specific date-range print, never "All time" — and only
+    // if there was actually something in that range to offer clearing.
+    if(hasRange && (allTickets.length > 0 || allPayments.length > 0)){
+      const ok = confirm(
+        `This PDF covered ${rangeLabel} for ${current.customer_name}: ` +
+        `${allTickets.length} ticket(s) and ${allPayments.length} payment(s).\n\n` +
+        `Delete these from the account's history now that they've been printed? ` +
+        `This cannot be undone.`
+      );
+      if(ok){
+        await clearPrintedRange(custRecords, fromDate, toDate);
+      }
+    }
+  });
 });
+
+/* Removes whatever tickets/payments fell inside a printed date range,
+   for every record belonging to that customer, and adjusts Capital to
+   match (subtracting whatever the removed tickets had contributed). */
+async function clearPrintedRange(custRecords, fromDate, toDate){
+  const inRange = d => (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+
+  for(const rec of custRecords){
+    const origTickets = rec.ticket_history || [];
+    const origPayments = rec.payment_history || [];
+    const keptTickets = origTickets.filter(t => !inRange(t.booking_date || t.date));
+    const keptPayments = origPayments.filter(p => !inRange(p.date));
+
+    if(keptTickets.length === origTickets.length && keptPayments.length === origPayments.length){
+      continue; // nothing in range for this particular record, skip it
+    }
+
+    const removedTickets = origTickets.filter(t => inRange(t.booking_date || t.date));
+    const removedCapital = removedTickets.reduce((s,t)=> s + Number(t.capital_total || 0), 0);
+    const newCapital = Number(rec.capital || 0) - removedCapital;
+
+    const { error } = await withRetry(() => supabase.from('ar_records').update({
+      ticket_history: keptTickets,
+      payment_history: keptPayments,
+      capital: newCapital
+    }).eq('id', rec.id));
+
+    if(error){
+      alert('Could not clear the printed records: ' + error.message);
+      return;
+    }
+  }
+
+  detailOverlay.classList.remove('show');
+  await loadRecords();
+}
 
 document.getElementById('saveDetailBtn').addEventListener('click', async ()=>{
   const remark = document.getElementById('d_remark').value;
