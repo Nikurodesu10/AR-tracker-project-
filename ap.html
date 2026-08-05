@@ -129,6 +129,15 @@
   .bs-folder-icon{font-size:40px; margin-bottom:10px;}
   .bs-folder-name{font-family:'Fraunces',serif; font-size:18px; font-weight:600;}
   .bs-folder-sub{font-size:12px; color:var(--text-dim); margin-top:6px; font-family:'IBM Plex Mono',monospace;}
+  .bs-folder{position:relative;}
+  .bs-folder-delete{
+    position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
+    border:1px solid var(--line); background:var(--paper-raised); color:var(--text-dim);
+    font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .12s, background .12s, color .12s;
+  }
+  .bs-folder:hover .bs-folder-delete{opacity:1;}
+  .bs-folder-delete:hover{background:var(--rust); color:#fff; border-color:var(--rust);}
 
   main{max-width:1180px; margin:0 auto; padding:28px 32px 60px;}
 
@@ -575,16 +584,53 @@ function showApTop(){
   document.getElementById('apTop').style.display = 'block';
 }
 
-function buildFolderCard(label, sub, onClick){
+function buildFolderCard(label, sub, onClick, onDelete){
   const div = document.createElement('div');
   div.className = 'bs-folder';
   div.innerHTML = `
+    ${onDelete ? '<button class="bs-folder-delete" type="button" title="Delete folder">&times;</button>' : ''}
     <div class="bs-folder-icon">📁</div>
     <div class="bs-folder-name">${escapeHtml(label)}</div>
     <div class="bs-folder-sub">${sub}</div>
   `;
   div.addEventListener('click', onClick);
+  if(onDelete){
+    const delBtn = div.querySelector('.bs-folder-delete');
+    delBtn.addEventListener('click', (e)=>{
+      e.stopPropagation(); // don't also open the folder
+      onDelete();
+    });
+  }
   return div;
+}
+
+async function deleteApFolder(folder){
+  const entryCount = entriesFor(folder, null).length +
+    (folder === 'Salary' ? SALARY_PEOPLE.reduce((s,p)=> s + entriesFor('Salary', p).length, 0) : 0);
+  const ok = confirm(
+    `Delete the "${folder}" folder${entryCount > 0 ? ` and its ${entryCount} entr${entryCount===1?'y':'ies'}` : ''}? ` +
+    `This cannot be undone.`
+  );
+  if(!ok) return;
+
+  // Remove every entry filed under this folder (including Salary's
+  // Joan/Ernila sub-entries, if this is the Salary folder).
+  const { error: delEntriesErr } = await withRetry(() => supabase.from('ap_entries').delete().eq('folder', folder));
+  if(delEntriesErr){
+    alert('Could not delete folder entries: ' + delEntriesErr.message);
+    return;
+  }
+  const folderRow = apFolders.find(f => f.name === folder);
+  if(folderRow){
+    const { error: delFolderErr } = await withRetry(() => supabase.from('ap_folders').delete().eq('id', folderRow.id));
+    if(delFolderErr){
+      alert('Could not delete folder: ' + delFolderErr.message);
+      return;
+    }
+  }
+  showApTop();
+  loadApFolders();
+  loadApEntries();
 }
 
 function renderFolderSummaries(){
@@ -594,10 +640,10 @@ function renderFolderSummaries(){
   apFolders.forEach(f=>{
     if(f.name === 'Salary'){
       const total = SALARY_PEOPLE.reduce((s,p)=> s + balanceFor('Salary', p), 0);
-      grid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders));
+      grid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders, ()=> deleteApFolder('Salary')));
     } else {
       const bal = balanceFor(f.name, null);
-      grid.appendChild(buildFolderCard(f.name, peso(bal), ()=> openApLedger(f.name, null, 'top')));
+      grid.appendChild(buildFolderCard(f.name, peso(bal), ()=> openApLedger(f.name, null, 'top'), ()=> deleteApFolder(f.name)));
     }
   });
 
