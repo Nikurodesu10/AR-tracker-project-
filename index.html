@@ -252,6 +252,8 @@
     #printStatement td, #printStatement th{padding:6px 4px; font-size:13px;}
     #printStatement .totals td{border-top:1px solid #333;}
     #printStatement tfoot td{border-top:1px solid #333; padding-top:8px;}
+    .print-page{page-break-after:always; break-after:page;}
+    .print-page:last-child{page-break-after:auto; break-after:auto;}
   }
 
   .section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:18px 0 8px; font-weight:600;}
@@ -1470,11 +1472,18 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const periodLabel = !hasRange ? 'Statement of Account' : `Statement of Account — ${rangeLabel}`;
   const balanceLabel = !hasRange ? 'Balance' : 'Net for the Period';
 
-  document.getElementById('printStatement').innerHTML = `
-    <h1>UND Travel and Tours</h1>
-    <h2 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 18px; text-align:center;">${escapeHtml(current.customer_name)}</h2>
+  // Capital/Income for whatever's actually being printed — same set of
+  // tickets as the statement above, just totaled up for the staff copy.
+  const totalCapital = allTickets.reduce((s,t)=> s + Number(t.capital_total||0), 0);
+  const income = totalTicket - totalCapital;
 
-    <h3 style="margin-top:18px; font-size:15px; text-align:center;">${periodLabel}</h3>
+  function buildStatementPage(forStaff){
+    return `
+    <h1>UND Travel and Tours</h1>
+    <h2 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 4px; text-align:center;">${escapeHtml(current.customer_name)}</h2>
+    ${forStaff ? '<p style="text-align:center; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:#888; margin:0 0 14px;">Staff Copy — Internal Records Only</p>' : '<div style="margin-bottom:18px;"></div>'}
+
+    <h3 style="margin-top:0; font-size:15px; text-align:center;">${periodLabel}</h3>
     <table>
       <thead><tr>
         <th style="text-align:left">Booking Date</th>
@@ -1501,6 +1510,15 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td colspan="8"><strong>${balanceLabel}</strong></td>
           <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
+        ${forStaff ? `
+        <tr>
+          <td colspan="8" style="padding-top:14px;">Capital</td>
+          <td style="text-align:right; padding-top:14px;">${peso(totalCapital)}</td>
+        </tr>
+        <tr class="totals">
+          <td colspan="8"><strong>Income</strong></td>
+          <td style="text-align:right"><strong>${peso(income)}</strong></td>
+        </tr>` : ''}
       </tfoot>
     </table>
 
@@ -1511,6 +1529,12 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     </table>
 
     <p style="margin-top:30px; font-size:11px; color:#888;">Printed ${new Date().toLocaleDateString()}</p>
+    `;
+  }
+
+  document.getElementById('printStatement').innerHTML = `
+    <div class="print-page">${buildStatementPage(false)}</div>
+    <div class="print-page">${buildStatementPage(true)}</div>
   `;
 
   // Data-URI images still need a beat to decode/paint before print() runs,
