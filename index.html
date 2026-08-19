@@ -1442,11 +1442,34 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     totalBalance = totalTicket - totalPaid;
   }
 
+  // Payments aren't tied to a specific ticket in the data, so to show
+  // "which ticket is paid" on the statement, allocate the total paid
+  // amount against tickets in date order (oldest first) — same way most
+  // step-by-step / installment payments naturally get applied.
+  let paymentPool = totalPaid;
+  const ticketPaidStatus = allTickets.map(t=>{
+    const amt = Number(t.amount||0);
+    let status;
+    if(amt > 0 && paymentPool >= amt){
+      status = 'paid';
+      paymentPool -= amt;
+    } else if(paymentPool > 0){
+      status = 'partial';
+      paymentPool = 0;
+    } else {
+      status = 'unpaid';
+    }
+    return status;
+  });
+
   const ticketRows = allTickets.length
-    ? allTickets.map(t=>{
+    ? allTickets.map((t, idx)=>{
         const rate = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / (Number(t.pax)||1));
+        const status = ticketPaidStatus[idx];
+        const rowStyle = status === 'paid' ? ' style="background:#FBF1DC;"' : '';
+        const statusLabel = status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid';
         return `
-        <tr>
+        <tr${rowStyle}>
           <td>${t.booking_date || t.date || ''}</td>
           <td>${t.departure_date || t.date || ''}</td>
           <td>${t.departure_time ? formatTime12(t.departure_time) : '—'}</td>
@@ -1456,9 +1479,10 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
           <td style="text-align:center">${t.pax || 1}</td>
           <td style="text-align:right">${peso(rate)}</td>
           <td style="text-align:right">${peso(t.amount)}</td>
+          <td style="text-align:center">${statusLabel}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="9">No tickets recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
+    : '<tr><td colspan="10">No tickets recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
 
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
@@ -1495,28 +1519,29 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
         <th style="text-align:center">Pax</th>
         <th style="text-align:right">Rate per Pax</th>
         <th style="text-align:right">Amount</th>
+        <th style="text-align:center">Status</th>
       </tr></thead>
       <tbody>${ticketRows}</tbody>
       <tfoot>
         <tr class="totals">
-          <td colspan="8"><strong>Total Amount</strong></td>
+          <td colspan="9"><strong>Total Amount</strong></td>
           <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
         </tr>
         <tr>
-          <td colspan="8">Paid${!hasRange ? ' to Date' : ' this Period'}</td>
+          <td colspan="9">Paid${!hasRange ? ' to Date' : ' this Period'}</td>
           <td style="text-align:right">${peso(totalPaid)}</td>
         </tr>
         <tr class="totals">
-          <td colspan="8"><strong>${balanceLabel}</strong></td>
+          <td colspan="9"><strong>${balanceLabel}</strong></td>
           <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
         </tr>
         ${forStaff ? `
         <tr>
-          <td colspan="8" style="padding-top:14px;">Capital</td>
+          <td colspan="9" style="padding-top:14px;">Capital</td>
           <td style="text-align:right; padding-top:14px;">${peso(totalCapital)}</td>
         </tr>
         <tr class="totals">
-          <td colspan="8"><strong>Income</strong></td>
+          <td colspan="9"><strong>Income</strong></td>
           <td style="text-align:right"><strong>${peso(income)}</strong></td>
         </tr>` : ''}
       </tfoot>
