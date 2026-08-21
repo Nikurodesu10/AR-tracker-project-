@@ -320,6 +320,7 @@
     </div>
     <div class="actions">
       <span class="conn"><span class="status-dot" id="connDot"></span><span id="connText">Synced</span></span>
+      <button class="btn secondary" id="manageUsersBtn" style="display:none;">Manage Users</button>
       <button class="btn secondary" id="exportBtn">Export CSV</button>
       <button class="btn secondary" id="logoutBtn">Log out</button>
     </div>
@@ -636,6 +637,44 @@
   </div>
 </div>
 
+<!-- ================= MANAGE USERS MODAL (Super Admin only) ================= -->
+<div class="overlay" id="usersOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2>Manage Users</h2></div>
+      <button class="modal-close" data-close="usersOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-label">Existing Accounts</div>
+      <ul class="hist-list" id="usersList"></ul>
+
+      <div class="section-label">Add New User</div>
+      <div class="grid2">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="nu_username" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="text" id="nu_password" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <label>Role</label>
+        <select id="nu_role" class="filter" style="width:100%;">
+          <option value="staff">Staff (Create + Read only)</option>
+          <option value="admin">Admin (Full access)</option>
+          <option value="superadmin">Super Admin (Full access + user management)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="usersOverlay">Close</button>
+      <button class="btn" id="addUserBtn">Add User</button>
+    </div>
+  </div>
+</div>
+
 <div id="printStatement" class="print-only"></div>
 
 <script type="module">
@@ -651,9 +690,9 @@ const UND_LOGO_B64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBw
 const NEON_DATA_API_URL = "https://ep-wispy-sound-atot4lsj.apirest.c-9.us-east-1.aws.neon.tech/neondb/rest/v1";
 const NEON_AUTH_URL = "https://ep-wispy-sound-atot4lsj.neonauth.c-9.us-east-1.aws.neon.tech/neondb/auth";
 
-/* Shared front-desk login (matches the JN Business pattern) — change these */
-const STAFF_USER = "Deilen75";
-const STAFF_PASS = "12345AIR";
+/* Shared front-desk login is gone — accounts now live in the
+   app_users table (Staff / Admin / Super Admin), checked against
+   the database on login instead of a single hardcoded password. */
 
 /* ============================================================ */
 
@@ -668,6 +707,9 @@ const supabase = createClient({
 let records = [];
 let currentDetailId = null;
 let currentFolder = null; // 'Other' or 'LGU' — which AR folder is currently open
+let currentUserRole = null; // 'staff' | 'admin' | 'superadmin'
+function canEdit(){ return currentUserRole === 'admin' || currentUserRole === 'superadmin'; }
+function isSuperAdmin(){ return currentUserRole === 'superadmin'; }
 
 /* ---------- Auth gate ---------- */
 const loginScreen = document.getElementById('loginScreen');
@@ -675,18 +717,29 @@ const appEl = document.getElementById('app');
 
 function checkSession(){
   if(sessionStorage.getItem('ar_logged_in') === 'true'){
+    currentUserRole = sessionStorage.getItem('ar_user_role');
     loginScreen.style.display = 'none';
     appEl.style.display = 'block';
     init();
   }
 }
 
-document.getElementById('loginForm').addEventListener('submit', (e)=>{
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const u = document.getElementById('user').value.trim();
   const p = document.getElementById('pass').value;
-  if(u === STAFF_USER && p === STAFF_PASS){
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  if(submitBtn) submitBtn.disabled = true;
+
+  const { data, error } = await supabase.from('app_users').select('*').eq('username', u);
+  const match = !error && data && data.find(row => row.password === p);
+
+  if(submitBtn) submitBtn.disabled = false;
+
+  if(match){
     sessionStorage.setItem('ar_logged_in', 'true');
+    sessionStorage.setItem('ar_user_role', match.role);
+    sessionStorage.setItem('ar_username', match.username);
     document.getElementById('loginError').style.display = 'none';
     checkSession();
   } else {
@@ -696,6 +749,8 @@ document.getElementById('loginForm').addEventListener('submit', (e)=>{
 
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
   sessionStorage.removeItem('ar_logged_in');
+  sessionStorage.removeItem('ar_user_role');
+  sessionStorage.removeItem('ar_username');
   location.reload();
 });
 
@@ -1231,9 +1286,11 @@ function openDetail(id){
     const indexed = tHist.map((t, i) => ({t, i}));
     indexed.slice().reverse().forEach(({t, i})=>{
       const li = document.createElement('li');
-      li.style.cursor = 'pointer';
-      li.title = 'Click to edit this ticket';
-      li.addEventListener('click', ()=> openEditTicket(r.id, i));
+      if(canEdit()){
+        li.style.cursor = 'pointer';
+        li.title = 'Click to edit this ticket';
+        li.addEventListener('click', ()=> openEditTicket(r.id, i));
+      }
       const bits = [];
       if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
       if(t.flight_route) bits.push(escapeHtml(t.flight_route));
@@ -1255,8 +1312,10 @@ function openDetail(id){
     const indexedHist = hist.map((p, i) => ({p, i}));
     indexedHist.slice().reverse().forEach(({p, i})=>{
       const li = document.createElement('li');
-      li.title = 'Click to edit this payment';
-      li.addEventListener('click', ()=> openEditPayment(r.id, i));
+      if(canEdit()){
+        li.title = 'Click to edit this payment';
+        li.addEventListener('click', ()=> openEditPayment(r.id, i));
+      }
       li.innerHTML = `<span class="hd">${p.date}</span><span class="ha">+ ${peso(p.amount)}</span>`;
       histEl.appendChild(li);
     });
@@ -1575,7 +1634,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
 
     // Only for a specific date-range print, never "All time" — and only
     // if there was actually something in that range to offer clearing.
-    if(hasRange && (allTickets.length > 0 || allPayments.length > 0)){
+    if(canEdit() && hasRange && (allTickets.length > 0 || allPayments.length > 0)){
       const ok = confirm(
         `This PDF covered ${rangeLabel} for ${current.customer_name}: ` +
         `${allTickets.length} ticket(s) and ${allPayments.length} payment(s).\n\n` +
@@ -1753,10 +1812,90 @@ document.getElementById('printFolderBtn').addEventListener('click', ()=>{
 });
 
 /* ---------- Init ---------- */
+/* ---------- Role-based permissions ---------- */
+function applyRolePermissions(){
+  document.getElementById('connText').textContent =
+    document.getElementById('connText').textContent + ` · ${sessionStorage.getItem('ar_username') || ''} (${currentUserRole})`;
+
+  if(!canEdit()){
+    // Staff: Create + Read only — no delete or edit affordances anywhere.
+    const deleteBtn = document.getElementById('deleteBtn');
+    if(deleteBtn) deleteBtn.style.display = 'none';
+    const saveDetailBtn = document.getElementById('saveDetailBtn');
+    if(saveDetailBtn) saveDetailBtn.style.display = 'none';
+    const remark = document.getElementById('d_remark');
+    if(remark) remark.setAttribute('readonly', 'readonly');
+    const deleteTicketBtn = document.getElementById('deleteTicketBtn');
+    if(deleteTicketBtn) deleteTicketBtn.style.display = 'none';
+  }
+
+  if(isSuperAdmin()){
+    document.getElementById('manageUsersBtn').style.display = 'inline-block';
+  }
+}
+
+/* ---------- Manage Users (Super Admin only) ---------- */
+const usersOverlay = document.getElementById('usersOverlay');
+
+async function loadUsers(){
+  const { data, error } = await supabase.from('app_users').select('*').order('created_at', {ascending:true});
+  const listEl = document.getElementById('usersList');
+  listEl.innerHTML = '';
+  if(error){
+    listEl.innerHTML = '<div class="hist-empty">Could not load users.</div>';
+    return;
+  }
+  (data || []).forEach(u=>{
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="hd"><strong>${escapeHtml(u.username)}</strong> — ${escapeHtml(u.role)}</span>
+      <button class="btn danger" style="padding:5px 10px; font-size:12px;" data-user-id="${u.id}">Delete</button>
+    `;
+    li.querySelector('button').addEventListener('click', async ()=>{
+      if(u.username === sessionStorage.getItem('ar_username')){
+        alert("You can't delete the account you're currently logged in as.");
+        return;
+      }
+      if(!confirm(`Delete the account "${u.username}"? This cannot be undone.`)) return;
+      const { error: delErr } = await withRetry(() => supabase.from('app_users').delete().eq('id', u.id));
+      if(delErr){ alert('Could not delete: ' + delErr.message); return; }
+      loadUsers();
+    });
+    listEl.appendChild(li);
+  });
+}
+
+document.getElementById('manageUsersBtn').addEventListener('click', ()=>{
+  document.getElementById('nu_username').value = '';
+  document.getElementById('nu_password').value = '';
+  document.getElementById('nu_role').value = 'staff';
+  loadUsers();
+  usersOverlay.classList.add('show');
+});
+
+document.getElementById('addUserBtn').addEventListener('click', async ()=>{
+  const username = document.getElementById('nu_username').value.trim();
+  const password = document.getElementById('nu_password').value;
+  const role = document.getElementById('nu_role').value;
+  if(!username || !password){
+    alert('Enter a username and password.');
+    return;
+  }
+  const { error } = await withRetry(() => supabase.from('app_users').insert({ username, password, role }));
+  if(error){
+    alert('Could not create user: ' + error.message);
+    return;
+  }
+  document.getElementById('nu_username').value = '';
+  document.getElementById('nu_password').value = '';
+  loadUsers();
+});
+
 function init(){
   showArFolders();
   loadRecords();
   subscribeRealtime();
+  applyRolePermissions();
 }
 
 checkSession();
