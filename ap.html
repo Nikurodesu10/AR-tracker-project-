@@ -438,9 +438,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@neondatabase/neon-js
 const NEON_DATA_API_URL = "https://ep-wispy-sound-atot4lsj.apirest.c-9.us-east-1.aws.neon.tech/neondb/rest/v1";
 const NEON_AUTH_URL = "https://ep-wispy-sound-atot4lsj.neonauth.c-9.us-east-1.aws.neon.tech/neondb/auth";
 
-/* Shared front-desk login (same as index.html / bs.html) */
-const STAFF_USER = "Deilen75";
-const STAFF_PASS = "12345AIR";
+/* Shared front-desk login is gone — accounts now live in the
+   app_users table (Staff / Admin / Super Admin), same table
+   index.html checks, so one set of accounts works for both apps. */
 
 /* ============================================================ */
 
@@ -449,33 +449,58 @@ const supabase = createClient({
   dataApi: { url: NEON_DATA_API_URL }
 });
 
+let currentUserRole = null; // 'staff' | 'admin' | 'superadmin'
+function canEdit(){ return currentUserRole === 'admin' || currentUserRole === 'superadmin'; }
+
 /* ---------- Auth gate ---------- */
 const loginScreen = document.getElementById('loginScreen');
 const appEl = document.getElementById('app');
 
 function checkSession(){
   if(sessionStorage.getItem('ar_logged_in') === 'true'){
+    currentUserRole = sessionStorage.getItem('ar_user_role');
     loginScreen.style.display = 'none';
     appEl.style.display = 'block';
     init();
   }
 }
 
-document.getElementById('loginForm').addEventListener('submit', (e)=>{
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const u = document.getElementById('user').value.trim();
   const p = document.getElementById('pass').value;
-  if(u === STAFF_USER && p === STAFF_PASS){
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  if(submitBtn) submitBtn.disabled = true;
+
+  const { data, error } = await supabase.from('app_users').select('*').eq('username', u);
+  console.log('Login lookup:', { data, error }); // temporary — check the browser console (F12) if login fails
+
+  if(submitBtn) submitBtn.disabled = false;
+
+  const errEl = document.getElementById('loginError');
+  if(error){
+    errEl.textContent = 'Login error: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const match = data && data.find(row => row.password === p);
+  if(match){
     sessionStorage.setItem('ar_logged_in', 'true');
-    document.getElementById('loginError').style.display = 'none';
+    sessionStorage.setItem('ar_user_role', match.role);
+    sessionStorage.setItem('ar_username', match.username);
+    errEl.style.display = 'none';
     checkSession();
   } else {
-    document.getElementById('loginError').style.display = 'block';
+    errEl.textContent = 'Incorrect username or password.';
+    errEl.style.display = 'block';
   }
 });
 
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
   sessionStorage.removeItem('ar_logged_in');
+  sessionStorage.removeItem('ar_user_role');
+  sessionStorage.removeItem('ar_username');
   location.reload();
 });
 
@@ -640,10 +665,10 @@ function renderFolderSummaries(){
   apFolders.forEach(f=>{
     if(f.name === 'Salary'){
       const total = SALARY_PEOPLE.reduce((s,p)=> s + balanceFor('Salary', p), 0);
-      grid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders, ()=> deleteApFolder('Salary')));
+      grid.appendChild(buildFolderCard('Salary', peso(total), showSalaryFolders, canEdit() ? (()=> deleteApFolder('Salary')) : null));
     } else {
       const bal = balanceFor(f.name, null);
-      grid.appendChild(buildFolderCard(f.name, peso(bal), ()=> openApLedger(f.name, null, 'top'), ()=> deleteApFolder(f.name)));
+      grid.appendChild(buildFolderCard(f.name, peso(bal), ()=> openApLedger(f.name, null, 'top'), canEdit() ? (()=> deleteApFolder(f.name)) : null));
     }
   });
 
@@ -689,8 +714,10 @@ function renderApLedger(){
   entries.forEach(e=>{
     running += Number(e.amount||0);
     const tr = document.createElement('tr');
-    tr.style.cursor = 'pointer';
-    tr.addEventListener('click', ()=> openApEntry(e));
+    if(canEdit()){
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', ()=> openApEntry(e));
+    }
     tr.innerHTML = `
       <td>${e.entry_date}</td>
       <td>${escapeHtml(e.particular || '—')}</td>
@@ -817,6 +844,11 @@ function init(){
   loadApFolders();
   loadApEntries();
   setInterval(()=>{ loadApFolders(); loadApEntries(); }, 45000); // simple polling sync, same as BS/AR
+  document.getElementById('connText').textContent =
+    document.getElementById('connText').textContent + ` · ${sessionStorage.getItem('ar_username') || ''} (${currentUserRole})`;
+  if(!canEdit()){
+    document.getElementById('apDeleteBtn').style.display = 'none';
+  }
 }
 
 checkSession();
