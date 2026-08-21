@@ -321,6 +321,7 @@
     <div class="actions">
       <span class="conn"><span class="status-dot" id="connDot"></span><span id="connText">Synced</span></span>
       <button class="btn secondary" id="manageUsersBtn" style="display:none;">Manage Users</button>
+      <button class="btn secondary" id="myProfileBtn">My Profile</button>
       <button class="btn secondary" id="exportBtn">Export CSV</button>
       <button class="btn secondary" id="logoutBtn">Log out</button>
     </div>
@@ -337,6 +338,7 @@
     <div class="side-nav-items">
       <a href="index.html" class="side-nav-item active"><span class="icon">📋</span>Accounts Receivable</a>
       <a href="ap.html" class="side-nav-item"><span class="icon">💳</span>Expenses</a>
+      <a href="chat.html" class="side-nav-item"><span class="icon">💬</span>Team Chat</a>
     </div>
     <div class="side-nav-foot">Signed in as Deilen75</div>
   </nav>
@@ -675,6 +677,30 @@
   </div>
 </div>
 
+<!-- ================= MY PROFILE MODAL ================= -->
+<div class="overlay" id="profileOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2>My Profile</h2></div>
+      <button class="modal-close" data-close="profileOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Username <span style="font-weight:400; color:var(--text-dim);">(used to log in — can't be changed here)</span></label>
+        <input type="text" id="pf_username" readonly style="background:var(--paper); color:var(--text-dim);">
+      </div>
+      <div class="field">
+        <label>Display Name <span style="font-weight:400; color:var(--text-dim);">(shown in Team Chat and elsewhere)</span></label>
+        <input type="text" id="pf_display_name" placeholder="e.g. Deilen">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="profileOverlay">Cancel</button>
+      <button class="btn" id="saveProfileBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="printStatement" class="print-only"></div>
 
 <script type="module">
@@ -762,6 +788,31 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
   sessionStorage.removeItem('ar_user_role');
   sessionStorage.removeItem('ar_username');
   location.reload();
+});
+
+/* ---------- My Profile (change display name, not the login username) ---------- */
+const profileOverlay = document.getElementById('profileOverlay');
+document.getElementById('myProfileBtn').addEventListener('click', async ()=>{
+  const username = sessionStorage.getItem('ar_username');
+  document.getElementById('pf_username').value = username || '';
+  const { data } = await supabase.from('app_users').select('*').eq('username', username);
+  const row = data && data[0];
+  document.getElementById('pf_display_name').value = (row && row.display_name) || '';
+  profileOverlay.classList.add('show');
+});
+
+document.getElementById('saveProfileBtn').addEventListener('click', async ()=>{
+  const username = sessionStorage.getItem('ar_username');
+  const displayName = document.getElementById('pf_display_name').value.trim();
+  const { error } = await withRetry(() => supabase
+    .from('app_users')
+    .update({ display_name: displayName })
+    .eq('username', username));
+  if(error){
+    alert('Could not save: ' + error.message);
+    return;
+  }
+  profileOverlay.classList.remove('show');
 });
 
 /* ---------- Helpers ---------- */
