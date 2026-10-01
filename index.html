@@ -212,6 +212,11 @@
   .overlay{position:fixed; inset:0; background:rgba(28,43,51,.55); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:40px 20px; overflow-y:auto;}
   .overlay.show{display:flex;}
   .modal{background:var(--paper); width:100%; max-width:520px; border-radius:5px; box-shadow:0 30px 70px rgba(0,0,0,.4); position:relative;}
+  .modal.resizable{
+    resize:both; overflow:auto; min-width:420px; min-height:340px;
+    max-width:95vw; max-height:90vh; width:760px; height:480px;
+  }
+  .modal.resizable .modal-body{max-height:none; height:calc(100% - 128px);}
   .modal-head{padding:22px 26px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start;}
   .modal-head h2{font-size:19px;}
   .modal-head .rn{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-dim); margin-top:4px;}
@@ -366,7 +371,10 @@
         <button class="btn secondary" id="arBackBtn">← Folders</button>
         <h3 id="arFolderTitle" style="font-size:18px; margin-left:4px;"></h3>
       </div>
-      <button class="btn secondary" id="printFolderBtn">Print Folder Statement</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn secondary" id="trendChartBtn" style="display:none;">📈 Trend Chart</button>
+        <button class="btn secondary" id="printFolderBtn">Print Folder Statement</button>
+      </div>
     </div>
 
     <div class="cards">
@@ -392,15 +400,6 @@
           <div class="p-row"><span>Sales</span><span class="mono" id="cardSales">₱0.00</span></div>
           <div class="p-row income"><span>Income</span><span class="mono" id="cardIncome">₱0.00</span></div>
         </div>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:30px;">
-      <div class="label" style="margin-bottom:12px;">Monthly Trend — Ticketed vs Collected</div>
-      <div id="trendChartWrap"><div class="empty-state" style="padding:30px;"><p>No ticket activity yet.</p></div></div>
-      <div style="display:flex; gap:20px; margin-top:10px; font-size:12px; color:var(--text-dim);">
-        <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--ink-soft); margin-right:5px;"></span>Ticketed</span>
-        <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--forest); margin-right:5px;"></span>Collected</span>
       </div>
     </div>
 
@@ -689,6 +688,23 @@
 
 <!-- ================= MY PROFILE MODAL ================= -->
 <!-- ================= ADD AR FOLDER MODAL (Super Admin only) ================= -->
+<!-- ================= TREND CHART MODAL (Super Admin only) ================= -->
+<div class="overlay" id="trendChartOverlay">
+  <div class="modal resizable">
+    <div class="modal-head">
+      <div><h2>Monthly Trend</h2><div class="rn">Ticketed vs Collected — drag the bottom-right corner to resize</div></div>
+      <button class="modal-close" data-close="trendChartOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="trendChartWrap"><div class="empty-state" style="padding:30px;"><p>No ticket activity yet.</p></div></div>
+      <div style="display:flex; gap:20px; margin-top:14px; font-size:12px; color:var(--text-dim);">
+        <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--ink-soft); margin-right:5px;"></span>Ticketed</span>
+        <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--forest); margin-right:5px;"></span>Collected</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="arFolderOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -997,6 +1013,15 @@ function renderTrendChart(){
   wrap.innerHTML = lineChartSvg(shownKeys, seriesA, seriesB);
 }
 
+const trendChartOverlay = document.getElementById('trendChartOverlay');
+document.getElementById('trendChartBtn').addEventListener('click', ()=>{
+  // Extra safety — the button itself is only ever shown to Super Admin,
+  // but this blocks it outright even if someone forces it visible via devtools.
+  if(!isSuperAdmin()) return;
+  renderTrendChart();
+  trendChartOverlay.classList.add('show');
+});
+
 function populateMonthFilter(){
   const sel = document.getElementById('monthFilter');
   const prev = sel.value;
@@ -1220,7 +1245,6 @@ document.getElementById('arSaveFolderBtn').addEventListener('click', async ()=>{
 function renderAll(){
   renderCards();
   renderTable();
-  renderTrendChart();
 }
 
 function renderCards(){
@@ -2083,6 +2107,7 @@ function applyRolePermissions(){
   if(isSuperAdmin()){
     document.getElementById('manageUsersBtn').style.display = 'inline-block';
     document.getElementById('arAddFolderBtn').style.display = 'inline-block';
+    document.getElementById('trendChartBtn').style.display = 'inline-block';
   }
   renderArFolders(); // re-draw so the delete "×" buttons reflect the now-known role
 }
