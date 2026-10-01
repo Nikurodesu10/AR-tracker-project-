@@ -129,6 +129,15 @@
   .bs-folder-icon{font-size:40px; margin-bottom:10px;}
   .bs-folder-name{font-family:'Fraunces',serif; font-size:18px; font-weight:600;}
   .bs-folder-sub{font-size:12px; color:var(--text-dim); margin-top:6px; font-family:'IBM Plex Mono',monospace;}
+  .bs-folder{position:relative;}
+  .bs-folder-delete{
+    position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
+    border:1px solid var(--line); background:var(--paper-raised); color:var(--text-dim);
+    font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .12s, background .12s, color .12s;
+  }
+  .bs-folder:hover .bs-folder-delete{opacity:1;}
+  .bs-folder-delete:hover{background:var(--rust); color:#fff; border-color:var(--rust);}
 
   main{max-width:1180px; margin:0 auto; padding:28px 32px 60px;}
 
@@ -346,18 +355,10 @@
 
   <main>
     <div id="arView">
-    <div id="arFolders" class="bs-folders">
-      <div class="bs-folder" data-folder="Other">
-        <div class="bs-folder-icon">📁</div>
-        <div class="bs-folder-name">Other</div>
-        <div class="bs-folder-sub" id="arFolderSubOther">—</div>
-      </div>
-      <div class="bs-folder" data-folder="LGU">
-        <div class="bs-folder-icon">📁</div>
-        <div class="bs-folder-name">LGU</div>
-        <div class="bs-folder-sub" id="arFolderSubLGU">—</div>
-      </div>
+    <div class="toolbar"><div class="left"></div>
+      <button class="btn" id="arAddFolderBtn" style="display:none;">+ Add Folder</button>
     </div>
+    <div id="arFolders" class="bs-folders"></div>
 
     <div id="arFolderDetail" style="display:none;">
     <div class="toolbar">
@@ -678,6 +679,26 @@
 </div>
 
 <!-- ================= MY PROFILE MODAL ================= -->
+<!-- ================= ADD AR FOLDER MODAL (Super Admin only) ================= -->
+<div class="overlay" id="arFolderOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2>New Folder</h2></div>
+      <button class="modal-close" data-close="arFolderOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Folder Name</label>
+        <input type="text" id="arFolderName" placeholder="e.g. Corporate">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="arFolderOverlay">Cancel</button>
+      <button class="btn" id="arSaveFolderBtn">Create Folder</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="profileOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -988,7 +1009,7 @@ async function loadRecords(){
   records = data || [];
   populateMonthFilter();
   populateCustomerList();
-  updateArFolderSummaries();
+  renderArFolders();
   if(currentFolder) renderAll();
 }
 
@@ -996,18 +1017,82 @@ function subscribeRealtime(){
   /* Neon's Data API has no live/realtime channel like Supabase, so this
      polls for changes every 8 seconds instead. Feels "live enough" for a
      handful of staff on the same shared login — just not instant. */
-  setInterval(loadRecords, 45000);
+  setInterval(()=>{ loadArFolders(); loadRecords(); }, 45000);
 }
 
-/* ---------- AR Folders (Other / LGU) ---------- */
-function updateArFolderSummaries(){
-  ['Other','LGU'].forEach(f=>{
-    const recs = records.filter(r=>r.folder === f);
+/* ---------- AR Folders — dynamic, loaded from ar_folders ---------- */
+let arFolders = [];
+
+async function loadArFolders(){
+  const { data, error } = await supabase
+    .from('ar_folders')
+    .select('*')
+    .order('created_at', {ascending:true});
+  if(error){
+    console.error(error);
+    return;
+  }
+  arFolders = data || [];
+  renderArFolders();
+}
+
+function buildArFolderCard(name, sub, onClick, onDelete){
+  const div = document.createElement('div');
+  div.className = 'bs-folder';
+  div.innerHTML = `
+    ${onDelete ? '<button class="bs-folder-delete" type="button" title="Delete folder">&times;</button>' : ''}
+    <div class="bs-folder-icon">📁</div>
+    <div class="bs-folder-name">${escapeHtml(name)}</div>
+    <div class="bs-folder-sub">${sub}</div>
+  `;
+  div.addEventListener('click', onClick);
+  if(onDelete){
+    const delBtn = div.querySelector('.bs-folder-delete');
+    delBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      onDelete();
+    });
+  }
+  return div;
+}
+
+function renderArFolders(){
+  const grid = document.getElementById('arFolders');
+  grid.innerHTML = '';
+  arFolders.forEach(f=>{
+    const recs = records.filter(r=>r.folder === f.name);
     const total = recs.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
-    document.getElementById(`arFolderSub${f}`).textContent =
-      `${peso(total)} · ${recs.length} record${recs.length===1?'':'s'}`;
+    const sub = `${peso(total)} · ${recs.length} record${recs.length===1?'':'s'}`;
+    grid.appendChild(buildArFolderCard(
+      f.name, sub,
+      ()=> showArFolderDetail(f.name),
+      isSuperAdmin() ? (()=> deleteArFolder(f)) : null
+    ));
   });
 }
+
+async function deleteArFolder(folderRow){
+  const recs = records.filter(r => r.folder === folderRow.name);
+  const ok = confirm(
+    `Delete the "${folderRow.name}" folder${recs.length > 0 ? ` and its ${recs.length} account${recs.length===1?'':'s'}` : ''}? ` +
+    `This cannot be undone.`
+  );
+  if(!ok) return;
+
+  const { error: delRecordsErr } = await withRetry(() => supabase.from('ar_records').delete().eq('folder', folderRow.name));
+  if(delRecordsErr){
+    alert('Could not delete folder accounts: ' + delRecordsErr.message);
+    return;
+  }
+  const { error: delFolderErr } = await withRetry(() => supabase.from('ar_folders').delete().eq('id', folderRow.id));
+  if(delFolderErr){
+    alert('Could not delete folder: ' + delFolderErr.message);
+    return;
+  }
+  await loadArFolders();
+  await loadRecords();
+}
+
 function showArFolders(){
   currentFolder = null;
   document.getElementById('arFolders').style.display = 'flex';
@@ -1022,10 +1107,32 @@ function showArFolderDetail(folder){
   populateCustomerList();
   renderAll();
 }
-document.querySelectorAll('#arFolders .bs-folder').forEach(card=>{
-  card.addEventListener('click', ()=> showArFolderDetail(card.getAttribute('data-folder')));
-});
 document.getElementById('arBackBtn').addEventListener('click', showArFolders);
+
+/* ---------- Add / delete AR folders — Super Admin only ---------- */
+const arFolderOverlay = document.getElementById('arFolderOverlay');
+document.getElementById('arAddFolderBtn').addEventListener('click', ()=>{
+  document.getElementById('arFolderName').value = '';
+  arFolderOverlay.classList.add('show');
+});
+document.getElementById('arSaveFolderBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('arFolderName').value.trim();
+  if(!name){
+    alert('Enter a folder name.');
+    return;
+  }
+  if(arFolders.some(f => f.name.toLowerCase() === name.toLowerCase())){
+    alert('A folder with that name already exists.');
+    return;
+  }
+  const { error } = await withRetry(() => supabase.from('ar_folders').insert({ name }));
+  if(error){
+    alert('Could not create folder: ' + error.message);
+    return;
+  }
+  arFolderOverlay.classList.remove('show');
+  loadArFolders();
+});
 
 /* ---------- Rendering ---------- */
 function renderAll(){
@@ -1892,7 +1999,9 @@ function applyRolePermissions(){
 
   if(isSuperAdmin()){
     document.getElementById('manageUsersBtn').style.display = 'inline-block';
+    document.getElementById('arAddFolderBtn').style.display = 'inline-block';
   }
+  renderArFolders(); // re-draw so the delete "×" buttons reflect the now-known role
 }
 
 /* ---------- Manage Users (Super Admin only) ---------- */
@@ -1954,6 +2063,7 @@ document.getElementById('addUserBtn').addEventListener('click', async ()=>{
 
 function init(){
   showArFolders();
+  loadArFolders();
   loadRecords();
   subscribeRealtime();
   applyRolePermissions();
