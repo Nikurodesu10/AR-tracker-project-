@@ -461,7 +461,7 @@
       <form id="newForm">
         <div class="grid2">
           <div class="field">
-            <label>Booking Date</label>
+            <label id="f_date_label">Booking Date</label>
             <input type="date" id="f_date" required>
           </div>
           <div class="field">
@@ -471,54 +471,68 @@
           </div>
         </div>
         <div class="field">
-          <label>Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span></label>
+          <label id="f_pname_label">Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span></label>
           <input type="text" id="f_pname" placeholder="Lead passenger for this ticket">
         </div>
-        <div class="grid2">
-          <div class="field">
-            <label>Departure Date</label>
-            <input type="date" id="f_depdate">
+        <div id="flightOnlyFields">
+          <div class="grid2">
+            <div class="field">
+              <label>Departure Date</label>
+              <input type="date" id="f_depdate">
+            </div>
+            <div class="field">
+              <label id="f_route_label">Flight Route</label>
+              <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
+            </div>
           </div>
+          <div class="grid2">
+            <div class="field">
+              <label>Departure Time</label>
+              <input type="time" id="f_deptime">
+            </div>
+            <div class="field">
+              <label>Arrival Time</label>
+              <input type="time" id="f_arrtime">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label>Airline</label>
+              <select id="f_airline">
+                <option value="">Select airline</option>
+                <option value="Cebu Pacific">Cebu Pacific</option>
+                <option value="Philippine Airlines">Philippine Airlines</option>
+                <option value="Air Asia">Air Asia</option>
+                <option value="LGU">LGU</option>
+                <option value="__other__">Other…</option>
+              </select>
+              <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
+            </div>
+          </div>
+        </div>
+        <div id="hotelOnlyFields" style="display:none;">
           <div class="field">
-            <label>Flight Route</label>
-            <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
+            <label id="f_route_label_hotel">Hotel Name</label>
+            <input type="text" id="f_route_hotel" placeholder="e.g. Seda Capitol Central">
           </div>
         </div>
         <div class="grid2">
-          <div class="field">
-            <label>Departure Time</label>
-            <input type="time" id="f_deptime">
-          </div>
-          <div class="field">
-            <label>Arrival Time</label>
-            <input type="time" id="f_arrtime">
-          </div>
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <label>Airline</label>
-            <select id="f_airline">
-              <option value="">Select airline</option>
-              <option value="Cebu Pacific">Cebu Pacific</option>
-              <option value="Philippine Airlines">Philippine Airlines</option>
-              <option value="Air Asia">Air Asia</option>
-              <option value="LGU">LGU</option>
-              <option value="__other__">Other…</option>
-            </select>
-            <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
-          </div>
-          <div class="field">
-            <label># of Pax</label>
+          <div class="field" id="f_pax_field">
+            <label id="f_pax_label"># of Pax</label>
             <input type="number" id="f_pax" step="1" min="1" placeholder="1" value="1">
           </div>
+          <div class="field" id="f_nights_field" style="display:none;">
+            <label># of Nights</label>
+            <input type="number" id="f_nights" step="1" min="1" placeholder="1" value="1">
+          </div>
         </div>
         <div class="grid2">
           <div class="field">
-            <label>Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span></label>
+            <label id="f_amount_label">Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span></label>
             <input type="number" id="f_amount" step="0.01" min="0" placeholder="0.00" required>
           </div>
           <div class="field">
-            <label>Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span></label>
+            <label id="f_total_label">Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span></label>
             <input type="number" id="f_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
           </div>
         </div>
@@ -613,6 +627,7 @@
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
       <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
+      <button class="btn secondary" id="addHotelBtn">+ Add Hotel</button>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
@@ -1049,23 +1064,72 @@ function nameWithPax(name, pax){
   return (pax && pax > 1) ? `${name} et al.` : name;
 }
 
-/* Live-recompute the Total field as ticket amount / pax change */
+/* ---------- Flight vs Hotel entry type ---------- */
+let entryType = 'flight'; // 'flight' | 'hotel'
+
+function setEntryType(type){
+  entryType = type;
+  const isHotel = type === 'hotel';
+
+  document.getElementById('flightOnlyFields').style.display = isHotel ? 'none' : 'block';
+  document.getElementById('hotelOnlyFields').style.display = isHotel ? 'block' : 'none';
+  document.getElementById('f_nights_field').style.display = isHotel ? 'block' : 'none';
+
+  // Booking Date loses its calendar picker for hotel — plain text instead.
+  const dateInput = document.getElementById('f_date');
+  const oldVal = dateInput.value;
+  const newType = isHotel ? 'text' : 'date';
+  if(dateInput.type !== newType){
+    dateInput.type = newType;
+    dateInput.value = oldVal;
+    dateInput.placeholder = isHotel ? 'e.g. Nov 1, 2026' : '';
+  }
+
+  document.getElementById('f_date_label').textContent = isHotel ? 'Booking Date' : 'Booking Date';
+  document.getElementById('f_pname_label').innerHTML = isHotel
+    ? 'Reservation Name'
+    : 'Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span>';
+  document.getElementById('f_pax_label').textContent = isHotel ? '# of Rooms' : '# of Pax';
+  document.getElementById('f_amount_label').innerHTML = isHotel
+    ? 'Rate <span style="font-weight:400; color:var(--text-dim);">(per room per night)</span>'
+    : 'Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span>';
+  document.getElementById('f_total_label').innerHTML = isHotel
+    ? 'Total <span style="font-weight:400; color:var(--text-dim);">(auto: nights × rooms × rate)</span>'
+    : 'Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span>';
+
+  recomputeFormTotal();
+  recomputeFormCapital();
+}
+
+/* Live-recompute the Total field — flight: amount × pax, hotel: amount × rooms × nights */
 function recomputeFormTotal(){
   const amt = parseFloat(document.getElementById('f_amount').value) || 0;
   const pax = parseInt(document.getElementById('f_pax').value, 10) || 1;
-  document.getElementById('f_total').value = (amt * pax).toFixed(2);
+  if(entryType === 'hotel'){
+    const nights = parseInt(document.getElementById('f_nights').value, 10) || 1;
+    document.getElementById('f_total').value = (amt * pax * nights).toFixed(2);
+  } else {
+    document.getElementById('f_total').value = (amt * pax).toFixed(2);
+  }
 }
 document.getElementById('f_amount').addEventListener('input', recomputeFormTotal);
 document.getElementById('f_pax').addEventListener('input', recomputeFormTotal);
+document.getElementById('f_nights').addEventListener('input', recomputeFormTotal);
 
-/* Live-recompute the Total Capital field as capital / pax change */
+/* Live-recompute the Total Capital field — same nights/rooms multiplier as Total */
 function recomputeFormCapital(){
   const cap = parseFloat(document.getElementById('f_capital').value) || 0;
   const pax = parseInt(document.getElementById('f_pax').value, 10) || 1;
-  document.getElementById('f_capital_total').value = (cap * pax).toFixed(2);
+  if(entryType === 'hotel'){
+    const nights = parseInt(document.getElementById('f_nights').value, 10) || 1;
+    document.getElementById('f_capital_total').value = (cap * pax * nights).toFixed(2);
+  } else {
+    document.getElementById('f_capital_total').value = (cap * pax).toFixed(2);
+  }
 }
 document.getElementById('f_capital').addEventListener('input', recomputeFormCapital);
 document.getElementById('f_pax').addEventListener('input', recomputeFormCapital);
+document.getElementById('f_nights').addEventListener('input', recomputeFormCapital);
 
 /* "Other…" airline option reveals a free-text field */
 document.getElementById('f_airline').addEventListener('change', (e)=>{
@@ -1345,10 +1409,13 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('newModalSub').textContent = 'Record no. assigned automatically';
   document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
+  setEntryType('flight');
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
+  document.getElementById('f_route_hotel').value = '';
+  document.getElementById('f_nights').value = '1';
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
@@ -1371,30 +1438,42 @@ function openEditTicket(recordId, index){
   if(!t) return;
 
   editingTicket = { recordId, index };
-  document.getElementById('newModalTitle').textContent = 'Edit Ticket';
+  const isHotel = t.type === 'hotel';
+  document.getElementById('newModalTitle').textContent = isHotel ? 'Edit Hotel Booking' : 'Edit Ticket';
   document.getElementById('newModalSub').textContent = r.record_no;
   document.getElementById('deleteTicketBtn').style.display = 'inline-block';
+  setEntryType(isHotel ? 'hotel' : 'flight');
 
   document.getElementById('f_date').value = t.booking_date || t.date || '';
   const nameField = document.getElementById('f_name');
   nameField.value = r.customer_name;
   nameField.disabled = true; // account name stays tied to the record it's already on
   document.getElementById('f_pname').value = t.passenger_name || '';
-  document.getElementById('f_depdate').value = t.departure_date || '';
-  document.getElementById('f_route').value = t.flight_route || '';
-  document.getElementById('f_deptime').value = t.departure_time || '';
-  document.getElementById('f_arrtime').value = t.arrival_time || '';
-  setAirlineField(t.airline || '');
   const pax = t.pax || 1;
   document.getElementById('f_pax').value = pax;
   const unit = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / pax);
   document.getElementById('f_amount').value = unit;
-  document.getElementById('f_total').value = (unit * pax).toFixed(2);
-  // Capital is now tracked per ticket, so pre-fill it from the stored value.
+
+  if(isHotel){
+    document.getElementById('f_route_hotel').value = t.flight_route || '';
+    const nights = t.nights || 1;
+    document.getElementById('f_nights').value = nights;
+    document.getElementById('f_total').value = (unit * pax * nights).toFixed(2);
+  } else {
+    document.getElementById('f_depdate').value = t.departure_date || '';
+    document.getElementById('f_route').value = t.flight_route || '';
+    document.getElementById('f_deptime').value = t.departure_time || '';
+    document.getElementById('f_arrtime').value = t.arrival_time || '';
+    setAirlineField(t.airline || '');
+    document.getElementById('f_total').value = (unit * pax).toFixed(2);
+  }
+
+  // Capital is tracked per ticket, so pre-fill it from the stored value.
   // Older tickets saved before this fix won't have it — treat those as 0.
   const capPerPax = (t.capital !== undefined && t.capital !== null) ? t.capital : 0;
   document.getElementById('f_capital').value = capPerPax || '';
-  document.getElementById('f_capital_total').value = (capPerPax * pax).toFixed(2);
+  const nightsForCap = isHotel ? (t.nights || 1) : 1;
+  document.getElementById('f_capital_total').value = (capPerPax * pax * nightsForCap).toFixed(2);
   document.getElementById('f_remark').value = '';
 
   detailOverlay.classList.remove('show');
@@ -1403,46 +1482,75 @@ function openEditTicket(recordId, index){
 
 document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('f_date').value;
-  const unitAmount = parseFloat(document.getElementById('f_amount').value); // ticket price per pax
+  const unitAmount = parseFloat(document.getElementById('f_amount').value); // ticket price per pax, or rate per room per night
   const capitalPerPax = document.getElementById('f_capital').value === '' ? 0 : parseFloat(document.getElementById('f_capital').value);
   const typedName = document.getElementById('f_name').value.trim();
   const name = findExistingName(typedName); // reuses existing spelling/casing if it's the same account
   const passengerName = document.getElementById('f_pname').value.trim();
   const remark = document.getElementById('f_remark').value.trim();
 
-  const depDate = document.getElementById('f_depdate').value;
-  const route = document.getElementById('f_route').value.trim();
-  const depTime = document.getElementById('f_deptime').value;
-  const arrTime = document.getElementById('f_arrtime').value;
-  const airline = getSelectedAirline();
   const paxRaw = document.getElementById('f_pax').value;
   const pax = paxRaw === '' ? 1 : parseInt(paxRaw, 10);
   const paxCount = (isNaN(pax) || pax < 1) ? 1 : pax;
 
   if(!date || !name || isNaN(unitAmount) || unitAmount < 0 || isNaN(capitalPerPax) || capitalPerPax < 0){
-    alert('Please fill in booking date, account name, and a valid ticket amount / capital.');
+    alert('Please fill in booking date, account name, and a valid amount / capital.');
     return;
   }
 
-  const total = unitAmount * paxCount;          // # of Pax × Ticket Amount
-  const capitalContribution = capitalPerPax * paxCount; // # of Pax × Capital
+  let ticketEntry;
+  let total, capitalContribution;
 
-  const ticketEntry = {
-    date, // booking date, kept as "date" for backward compatibility with older entries
-    amount: total,      // the full amount owed for this booking (feeds balance calc)
-    unit_amount: unitAmount,
-    booking_date: date,
-    passenger_name: passengerName,
-    departure_date: depDate,
-    flight_route: route,
-    departure_time: depTime,
-    arrival_time: arrTime,
-    airline: airline,
-    pax: paxCount,
-    total: total,
-    capital: capitalPerPax,           // per-pax capital cost for THIS ticket
-    capital_total: capitalContribution // capitalPerPax × pax — what this ticket contributed to the account's Capital total
-  };
+  if(entryType === 'hotel'){
+    const hotelName = document.getElementById('f_route_hotel').value.trim();
+    const nightsRaw = document.getElementById('f_nights').value;
+    const nights = (nightsRaw === '' || isNaN(parseInt(nightsRaw,10)) || parseInt(nightsRaw,10) < 1) ? 1 : parseInt(nightsRaw, 10);
+
+    total = unitAmount * paxCount * nights;              // nights × rooms × rate
+    capitalContribution = capitalPerPax * paxCount * nights;
+
+    ticketEntry = {
+      type: 'hotel',
+      date,
+      amount: total,
+      unit_amount: unitAmount,
+      booking_date: date,
+      passenger_name: passengerName,  // Reservation Name
+      flight_route: hotelName,        // Hotel Name
+      pax: paxCount,                  // # of Rooms
+      nights: nights,
+      total: total,
+      capital: capitalPerPax,
+      capital_total: capitalContribution
+    };
+  } else {
+    const depDate = document.getElementById('f_depdate').value;
+    const route = document.getElementById('f_route').value.trim();
+    const depTime = document.getElementById('f_deptime').value;
+    const arrTime = document.getElementById('f_arrtime').value;
+    const airline = getSelectedAirline();
+
+    total = unitAmount * paxCount;          // # of Pax × Ticket Amount
+    capitalContribution = capitalPerPax * paxCount; // # of Pax × Capital
+
+    ticketEntry = {
+      type: 'flight',
+      date, // booking date, kept as "date" for backward compatibility with older entries
+      amount: total,      // the full amount owed for this booking (feeds balance calc)
+      unit_amount: unitAmount,
+      booking_date: date,
+      passenger_name: passengerName,
+      departure_date: depDate,
+      flight_route: route,
+      departure_time: depTime,
+      arrival_time: arrTime,
+      airline: airline,
+      pax: paxCount,
+      total: total,
+      capital: capitalPerPax,           // per-pax capital cost for THIS ticket
+      capital_total: capitalContribution // capitalPerPax × pax — what this ticket contributed to the account's Capital total
+    };
+  }
 
   let error;
 
@@ -1567,13 +1675,22 @@ function openDetail(id){
         li.addEventListener('click', ()=> openEditTicket(r.id, i));
       }
       const bits = [];
-      if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
-      if(t.flight_route) bits.push(escapeHtml(t.flight_route));
-      if(t.airline) bits.push(escapeHtml(t.airline));
-      if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + formatTime12(t.departure_time) : ''}`);
-      if(t.pax) bits.push(`${t.pax} pax`);
+      const isHotelEntry = t.type === 'hotel';
+      const typeTag = isHotelEntry ? '🏨 ' : '';
+      if(isHotelEntry){
+        if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
+        if(t.flight_route) bits.push(escapeHtml(t.flight_route));
+        if(t.nights) bits.push(`${t.nights} night${t.nights===1?'':'s'}`);
+        if(t.pax) bits.push(`${t.pax} room${t.pax===1?'':'s'}`);
+      } else {
+        if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
+        if(t.flight_route) bits.push(escapeHtml(t.flight_route));
+        if(t.airline) bits.push(escapeHtml(t.airline));
+        if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + formatTime12(t.departure_time) : ''}`);
+        if(t.pax) bits.push(`${t.pax} pax`);
+      }
       const detailLine = bits.length ? `<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${bits.join(' · ')}</div>` : '';
-      li.innerHTML = `<div class="hd">Booked ${t.date}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
+      li.innerHTML = `<div class="hd">${typeTag}Booked ${t.date}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
       ticketsEl.appendChild(li);
     });
   }
@@ -1703,18 +1820,19 @@ document.getElementById('deletePaymentBtn').addEventListener('click', async ()=>
   openDetail(recordId);
 });
 
-document.getElementById('addTicketBtn').addEventListener('click', ()=>{
-  const r = records.find(x=>x.id === currentDetailId);
-  if(!r) return;
+function resetTicketFormForAdd(r, type, title){
   editingTicket = null;
-  document.getElementById('newModalTitle').textContent = 'New Ticket';
+  document.getElementById('newModalTitle').textContent = title;
   document.getElementById('newModalSub').textContent = r.record_no;
   document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
-  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  setEntryType(type);
+  document.getElementById('f_date').value = type === 'hotel' ? '' : new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
+  document.getElementById('f_route_hotel').value = '';
+  document.getElementById('f_nights').value = '1';
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
@@ -1726,9 +1844,21 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   document.getElementById('f_pname').value = '';
   const nameField = document.getElementById('f_name');
   nameField.value = r.customer_name;
-  nameField.disabled = true; // locked so this ticket definitely lands under the same account
+  nameField.disabled = true; // locked so this entry definitely lands under the same account
   detailOverlay.classList.remove('show');
   newOverlay.classList.add('show');
+}
+
+document.getElementById('addTicketBtn').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
+  resetTicketFormForAdd(r, 'flight', 'New Ticket');
+});
+
+document.getElementById('addHotelBtn').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
+  resetTicketFormForAdd(r, 'hotel', 'New Hotel Booking');
 });
 
 document.getElementById('printBtn').addEventListener('click', ()=>{
@@ -1802,15 +1932,19 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
         const status = ticketPaidStatus[idx];
         const rowStyle = status === 'paid' ? ' style="background:#FBF1DC;"' : '';
         const statusLabel = status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid';
+        const isHotelEntry = t.type === 'hotel';
+        // Hotel rows reuse the same columns: Departure Date/Time become
+        // blank (not applicable), Airline becomes the nights count, and
+        // Pax becomes the room count.
         return `
         <tr${rowStyle}>
           <td>${t.booking_date || t.date || ''}</td>
-          <td>${t.departure_date || t.date || ''}</td>
-          <td>${t.departure_time ? formatTime12(t.departure_time) : '—'}</td>
+          <td>${isHotelEntry ? '—' : (t.departure_date || t.date || '')}</td>
+          <td>${isHotelEntry ? '—' : (t.departure_time ? formatTime12(t.departure_time) : '—')}</td>
           <td>${escapeHtml(t.passenger_name || '—')}</td>
-          <td>${escapeHtml(t.flight_route || '—')}</td>
-          <td>${escapeHtml(t.airline || '—')}</td>
-          <td style="text-align:center">${t.pax || 1}</td>
+          <td>${isHotelEntry ? '🏨 ' : ''}${escapeHtml(t.flight_route || '—')}</td>
+          <td>${isHotelEntry ? `${t.nights || 1} night${(t.nights||1)===1?'':'s'}` : escapeHtml(t.airline || '—')}</td>
+          <td style="text-align:center">${t.pax || 1}${isHotelEntry ? ' rm' : ''}</td>
           <td style="text-align:right">${peso(rate)}</td>
           <td style="text-align:right">${peso(t.amount)}</td>
           <td style="text-align:center">${statusLabel}</td>
@@ -1856,30 +1990,26 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
         <th style="text-align:center">Status</th>
       </tr></thead>
       <tbody>${ticketRows}</tbody>
-      <tfoot>
-        <tr class="totals">
-          <td colspan="9"><strong>Total Amount</strong></td>
-          <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
-        </tr>
-        <tr>
-          <td colspan="9">Paid${!hasRange ? ' to Date' : ' this Period'}</td>
-          <td style="text-align:right">${peso(totalPaid)}</td>
-        </tr>
-        <tr class="totals">
-          <td colspan="9"><strong>${balanceLabel}</strong></td>
-          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
-        </tr>
-        ${forStaff ? `
-        <tr>
-          <td colspan="9" style="padding-top:14px;">Capital</td>
-          <td style="text-align:right; padding-top:14px;">${peso(totalCapital)}</td>
-        </tr>
-        <tr class="totals">
-          <td colspan="9"><strong>Income</strong></td>
-          <td style="text-align:right"><strong>${peso(income)}</strong></td>
-        </tr>` : ''}
-      </tfoot>
     </table>
+
+    <div style="margin-top:4px;">
+      <div class="totals" style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid #333;">
+        <strong>Total Amount</strong><strong>${peso(totalTicket)}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0;">
+        <span>Paid${!hasRange ? ' to Date' : ' this Period'}</span><span>${peso(totalPaid)}</span>
+      </div>
+      <div class="totals" style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid #333;">
+        <strong>${balanceLabel}</strong><strong>${peso(totalBalance)}</strong>
+      </div>
+      ${forStaff ? `
+      <div style="display:flex; justify-content:space-between; padding:10px 0 4px;">
+        <span>Capital</span><span>${peso(totalCapital)}</span>
+      </div>
+      <div class="totals" style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid #333;">
+        <strong>Income</strong><strong>${peso(income)}</strong>
+      </div>` : ''}
+    </div>
 
     <h3 style="margin-top:22px; font-size:15px;">Payment History</h3>
     <table>
@@ -2071,16 +2201,15 @@ document.getElementById('printFolderBtn').addEventListener('click', ()=>{
         <th style="text-align:left">Status</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot>
-        <tr class="totals">
-          <td colspan="2"><strong>Total</strong></td>
-          <td style="text-align:right"><strong>${peso(totalTicket)}</strong></td>
-          <td style="text-align:right"><strong>${peso(totalPaid)}</strong></td>
-          <td style="text-align:right"><strong>${peso(totalBalance)}</strong></td>
-          <td></td>
-        </tr>
-      </tfoot>
     </table>
+    <div class="totals" style="display:flex; justify-content:space-between; padding-top:6px; margin-top:4px; border-top:1px solid #333;">
+      <strong>Total</strong>
+      <span style="display:flex; gap:40px;">
+        <strong>${peso(totalTicket)}</strong>
+        <strong>${peso(totalPaid)}</strong>
+        <strong>${peso(totalBalance)}</strong>
+      </span>
+    </div>
     <p style="margin-top:30px; font-size:11px; color:#888;">Printed ${new Date().toLocaleDateString()}</p>
   `;
   window.print();
