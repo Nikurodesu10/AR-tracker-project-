@@ -611,6 +611,16 @@
             <input type="number" id="h_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
           </div>
         </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Capital <span style="font-weight:400; color:var(--text-dim);">(per room per night)</span></label>
+            <input type="number" id="h_capital" step="0.01" min="0" placeholder="0.00 (cost tied to this booking)">
+          </div>
+          <div class="field">
+            <label>Total Capital <span style="font-weight:400; color:var(--text-dim);">(auto: nights × rooms × capital)</span></label>
+            <input type="number" id="h_capital_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
+          </div>
+        </div>
       </form>
     </div>
     <div class="modal-foot">
@@ -638,8 +648,9 @@
           <div class="val mono" id="d_capital">₱0.00</div>
         </div>
         <div class="t-block">
-          <div class="label">Ticket Amount</div>
+          <div class="label">Ticket Amount <span style="text-transform:none; letter-spacing:0; color:#8198A2;">(tickets + hotels)</span></div>
           <div class="val mono" id="d_ticket">₱0.00</div>
+          <div style="font-size:10.5px; color:#8198A2; margin-top:3px; font-family:'IBM Plex Mono',monospace;" id="d_ticket_breakdown"></div>
         </div>
         <div class="t-block">
           <div class="label">Paid to Date</div>
@@ -1157,6 +1168,16 @@ document.getElementById('h_nights').addEventListener('input', recomputeHotelTota
 document.getElementById('h_rooms').addEventListener('input', recomputeHotelTotal);
 document.getElementById('h_rate').addEventListener('input', recomputeHotelTotal);
 
+function recomputeHotelCapital(){
+  const nights = parseInt(document.getElementById('h_nights').value, 10) || 1;
+  const rooms = parseInt(document.getElementById('h_rooms').value, 10) || 1;
+  const cap = parseFloat(document.getElementById('h_capital').value) || 0;
+  document.getElementById('h_capital_total').value = (nights * rooms * cap).toFixed(2);
+}
+document.getElementById('h_nights').addEventListener('input', recomputeHotelCapital);
+document.getElementById('h_rooms').addEventListener('input', recomputeHotelCapital);
+document.getElementById('h_capital').addEventListener('input', recomputeHotelCapital);
+
 /* Nights can be auto-calculated from Check-in/Check-out, or typed in
    manually — the checkbox decides which. */
 function recomputeHotelNights(){
@@ -1671,6 +1692,12 @@ function openDetail(id){
   document.getElementById('d_balance').textContent = peso(r.balance);
   document.getElementById('d_remark').value = r.remark || '';
 
+  // Ticket Amount above is tickets + hotels combined — show the split too.
+  const ticketTotalOnly = (r.ticket_history || []).reduce((s,t)=> s + Number(t.amount||0), 0);
+  const hotelTotalOnly = (r.hotel_history || []).reduce((s,h)=> s + Number(h.total||0), 0);
+  document.getElementById('d_ticket_breakdown').textContent =
+    `Tickets ${peso(ticketTotalOnly)} · Hotels ${peso(hotelTotalOnly)}`;
+
   const pct = paidPct(r);
   document.getElementById('d_pie').innerHTML = pieSvg(pct, 56);
   document.getElementById('d_pct').textContent = `${Math.round(pct*100)}%`;
@@ -1910,6 +1937,8 @@ function openNewHotelForm(r){
   document.getElementById('h_rooms').value = '1';
   document.getElementById('h_rate').value = '';
   document.getElementById('h_total').value = '';
+  document.getElementById('h_capital').value = '';
+  document.getElementById('h_capital_total').value = '';
   setHotelNightsMode(true);
   detailOverlay.classList.remove('show');
   hotelOverlay.classList.add('show');
@@ -1935,6 +1964,8 @@ function openEditHotel(recordId, index){
   document.getElementById('h_rooms').value = h.rooms || 1;
   document.getElementById('h_rate').value = h.rate || '';
   document.getElementById('h_total').value = h.total || '';
+  document.getElementById('h_capital').value = h.capital || '';
+  document.getElementById('h_capital_total').value = h.capital_total || '';
   setHotelNightsMode(document.getElementById('h_auto_nights').checked);
 
   detailOverlay.classList.remove('show');
@@ -1951,10 +1982,12 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
   const nightsRaw = document.getElementById('h_nights').value;
   const roomsRaw = document.getElementById('h_rooms').value;
   const rate = parseFloat(document.getElementById('h_rate').value) || 0;
+  const capitalPerRoom = parseFloat(document.getElementById('h_capital').value) || 0;
 
   const nights = (nightsRaw === '' || isNaN(parseInt(nightsRaw,10)) || parseInt(nightsRaw,10) < 1) ? 1 : parseInt(nightsRaw, 10);
   const rooms = (roomsRaw === '' || isNaN(parseInt(roomsRaw,10)) || parseInt(roomsRaw,10) < 1) ? 1 : parseInt(roomsRaw, 10);
   const total = nights * rooms * rate;
+  const capitalContribution = nights * rooms * capitalPerRoom;
 
   if(!hotelName){
     alert('Enter a hotel name.');
@@ -1980,7 +2013,9 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
     nights: nights,
     rooms: rooms,
     rate: rate,
-    total: total
+    total: total,
+    capital: capitalPerRoom,           // per room per night
+    capital_total: capitalContribution // nights × rooms × capital
   };
 
   let targetRecordId;
@@ -1989,19 +2024,25 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
   if(editingHotel){
     const record = records.find(r => r.id === editingHotel.recordId);
     if(!record){ alert('Could not find that record.'); return; }
+    const oldEntry = (record.hotel_history || [])[editingHotel.index] || {};
+    const oldCapitalTotal = Number(oldEntry.capital_total || 0);
     const newHotelHistory = [...(record.hotel_history || [])];
     newHotelHistory[editingHotel.index] = hotelEntry;
+    const newRecordCapital = Number(record.capital || 0) - oldCapitalTotal + capitalContribution;
     targetRecordId = record.id;
     ({ error } = await withRetry(() => supabase.from('ar_records').update({
-      hotel_history: newHotelHistory
+      hotel_history: newHotelHistory,
+      capital: newRecordCapital
     }).eq('id', record.id)));
   } else {
     const record = records.find(r => r.id === currentDetailId);
     if(!record){ alert('Could not find that record.'); return; }
     const newHotelHistory = [...(record.hotel_history || []), hotelEntry];
+    const newRecordCapital = Number(record.capital || 0) + capitalContribution;
     targetRecordId = record.id;
     ({ error } = await withRetry(() => supabase.from('ar_records').update({
-      hotel_history: newHotelHistory
+      hotel_history: newHotelHistory,
+      capital: newRecordCapital
     }).eq('id', record.id)));
   }
 
@@ -2021,10 +2062,13 @@ document.getElementById('deleteHotelBtn').addEventListener('click', async ()=>{
 
   const record = records.find(r => r.id === editingHotel.recordId);
   if(!record) return;
+  const deletedEntry = (record.hotel_history || [])[editingHotel.index] || {};
   const newHotelHistory = (record.hotel_history || []).filter((_, i) => i !== editingHotel.index);
+  const newRecordCapital = Number(record.capital || 0) - Number(deletedEntry.capital_total || 0);
 
   const { error } = await withRetry(() => supabase.from('ar_records').update({
-    hotel_history: newHotelHistory
+    hotel_history: newHotelHistory,
+    capital: newRecordCapital
   }).eq('id', record.id));
 
   if(error){
@@ -2163,8 +2207,10 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const balanceLabel = !hasRange ? 'Balance' : 'Net for the Period';
 
   // Capital/Income for whatever's actually being printed — same set of
-  // tickets as the statement above, just totaled up for the staff copy.
-  const totalCapital = allTickets.reduce((s,t)=> s + Number(t.capital_total||0), 0);
+  // tickets and hotel bookings as the statement above, totaled for the
+  // staff copy.
+  const totalCapital = allTickets.reduce((s,t)=> s + Number(t.capital_total||0), 0)
+    + allHotels.reduce((s,h)=> s + Number(h.capital_total||0), 0);
   const income = totalTicket - totalCapital;
 
   function buildStatementPage(forStaff){
