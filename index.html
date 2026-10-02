@@ -570,14 +570,31 @@
             <input type="text" id="h_hotel_name" placeholder="e.g. Seda Capitol Central">
           </div>
         </div>
-        <div class="field">
-          <label>Booking Date</label>
-          <input type="text" id="h_booking_date" placeholder="e.g. Nov 1, 2026">
+        <div class="grid2">
+          <div class="field">
+            <label>Reservation Date <span style="font-weight:400; color:var(--text-dim);">(when it was booked)</span></label>
+            <input type="date" id="h_reservation_date">
+          </div>
+          <div class="field"></div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Check-in Date</label>
+            <input type="date" id="h_checkin">
+          </div>
+          <div class="field">
+            <label>Check-out Date</label>
+            <input type="date" id="h_checkout">
+          </div>
         </div>
         <div class="grid2">
           <div class="field">
             <label># of Nights</label>
             <input type="number" id="h_nights" step="1" min="1" placeholder="1" value="1">
+            <label style="display:flex; align-items:center; gap:7px; font-weight:400; margin-top:7px; cursor:pointer;">
+              <input type="checkbox" id="h_auto_nights" checked style="width:15px; height:15px; margin:0;">
+              Auto-calculate from dates
+            </label>
           </div>
           <div class="field">
             <label># of Rooms</label>
@@ -1139,6 +1156,38 @@ function recomputeHotelTotal(){
 document.getElementById('h_nights').addEventListener('input', recomputeHotelTotal);
 document.getElementById('h_rooms').addEventListener('input', recomputeHotelTotal);
 document.getElementById('h_rate').addEventListener('input', recomputeHotelTotal);
+
+/* Nights can be auto-calculated from Check-in/Check-out, or typed in
+   manually — the checkbox decides which. */
+function recomputeHotelNights(){
+  const nightsField = document.getElementById('h_nights');
+  if(!document.getElementById('h_auto_nights').checked) return; // manual mode — leave whatever the staff typed
+
+  const checkin = document.getElementById('h_checkin').value;
+  const checkout = document.getElementById('h_checkout').value;
+  if(checkin && checkout){
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diff = Math.round((new Date(checkout) - new Date(checkin)) / msPerDay);
+    nightsField.value = diff > 0 ? diff : 1;
+  }
+  recomputeHotelTotal();
+}
+
+function setHotelNightsMode(auto){
+  const nightsField = document.getElementById('h_nights');
+  if(auto){
+    nightsField.setAttribute('readonly', 'readonly');
+    nightsField.style.background = 'var(--paper)';
+    recomputeHotelNights();
+  } else {
+    nightsField.removeAttribute('readonly');
+    nightsField.style.background = '';
+  }
+}
+
+document.getElementById('h_checkin').addEventListener('change', recomputeHotelNights);
+document.getElementById('h_checkout').addEventListener('change', recomputeHotelNights);
+document.getElementById('h_auto_nights').addEventListener('change', (e)=> setHotelNightsMode(e.target.checked));
 
 /* "Other…" airline option reveals a free-text field */
 document.getElementById('f_airline').addEventListener('change', (e)=>{
@@ -1836,6 +1885,7 @@ function renderHotels(r){
     const bits = [];
     if(h.reservation_name) bits.push(escapeHtml(h.reservation_name));
     if(h.hotel_name) bits.push(escapeHtml(h.hotel_name));
+    if(h.reservation_date) bits.push(`Reserved ${h.reservation_date}`);
     bits.push(`${h.nights||1} night${(h.nights||1)===1?'':'s'}`);
     bits.push(`${h.rooms||1} room${(h.rooms||1)===1?'':'s'}`);
     const detailLine = `<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${bits.join(' · ')}</div>`;
@@ -1852,11 +1902,15 @@ function openNewHotelForm(r){
   document.getElementById('hotelForm').reset();
   document.getElementById('h_reservation_name').value = '';
   document.getElementById('h_hotel_name').value = '';
-  document.getElementById('h_booking_date').value = '';
+  document.getElementById('h_reservation_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('h_checkin').value = '';
+  document.getElementById('h_checkout').value = '';
+  document.getElementById('h_auto_nights').checked = true;
   document.getElementById('h_nights').value = '1';
   document.getElementById('h_rooms').value = '1';
   document.getElementById('h_rate').value = '';
   document.getElementById('h_total').value = '';
+  setHotelNightsMode(true);
   detailOverlay.classList.remove('show');
   hotelOverlay.classList.add('show');
 }
@@ -1873,11 +1927,15 @@ function openEditHotel(recordId, index){
   document.getElementById('deleteHotelBtn').style.display = 'inline-block';
   document.getElementById('h_reservation_name').value = h.reservation_name || '';
   document.getElementById('h_hotel_name').value = h.hotel_name || '';
-  document.getElementById('h_booking_date').value = h.booking_date || '';
+  document.getElementById('h_reservation_date').value = h.reservation_date || '';
+  document.getElementById('h_checkin').value = h.checkin_date || '';
+  document.getElementById('h_checkout').value = h.checkout_date || '';
+  document.getElementById('h_auto_nights').checked = h.auto_nights !== false; // default true for older entries
   document.getElementById('h_nights').value = h.nights || 1;
   document.getElementById('h_rooms').value = h.rooms || 1;
   document.getElementById('h_rate').value = h.rate || '';
   document.getElementById('h_total').value = h.total || '';
+  setHotelNightsMode(document.getElementById('h_auto_nights').checked);
 
   detailOverlay.classList.remove('show');
   hotelOverlay.classList.add('show');
@@ -1886,7 +1944,10 @@ function openEditHotel(recordId, index){
 document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
   const reservationName = document.getElementById('h_reservation_name').value.trim();
   const hotelName = document.getElementById('h_hotel_name').value.trim();
-  const bookingDate = document.getElementById('h_booking_date').value.trim();
+  const reservationDate = document.getElementById('h_reservation_date').value;
+  const checkinDate = document.getElementById('h_checkin').value;
+  const checkoutDate = document.getElementById('h_checkout').value;
+  const autoNights = document.getElementById('h_auto_nights').checked;
   const nightsRaw = document.getElementById('h_nights').value;
   const roomsRaw = document.getElementById('h_rooms').value;
   const rate = parseFloat(document.getElementById('h_rate').value) || 0;
@@ -1899,10 +1960,22 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
     alert('Enter a hotel name.');
     return;
   }
+  if(autoNights && (!checkinDate || !checkoutDate)){
+    alert('Enter both a check-in and check-out date, or uncheck "Auto-calculate from dates" to set nights manually.');
+    return;
+  }
+
+  // Display-friendly date — used in the Hotels Added list and on the
+  // printed statement.
+  const bookingDate = (checkinDate && checkoutDate) ? `${checkinDate} to ${checkoutDate}` : (checkinDate || checkoutDate || '');
 
   const hotelEntry = {
     reservation_name: reservationName,
     hotel_name: hotelName,
+    reservation_date: reservationDate,
+    checkin_date: checkinDate,
+    checkout_date: checkoutDate,
+    auto_nights: autoNights,
     booking_date: bookingDate,
     nights: nights,
     rooms: rooms,
@@ -1991,7 +2064,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   custRecords.forEach(r=>{
     (r.hotel_history || []).forEach(h=> allHotels.push(h));
   });
-  allHotels.sort((a,b)=> (a.booking_date||'').localeCompare(b.booking_date||''));
+  allHotels.sort((a,b)=> (a.checkin_date || a.booking_date || '').localeCompare(b.checkin_date || b.booking_date || ''));
 
   // Combined payment history across this customer's record(s)
   let allPayments = [];
@@ -2013,7 +2086,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     // bookings are filtered by their own booking_date, same idea as tickets.
     const inRange = d => (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
     allTickets = allTickets.filter(t => inRange(t.booking_date || t.date));
-    allHotels = allHotels.filter(h => inRange(h.booking_date));
+    allHotels = allHotels.filter(h => inRange(h.checkin_date || h.booking_date));
     allPayments = allPayments.filter(p => inRange(p.date));
     const hotelTotal = allHotels.reduce((s,h)=> s + Number(h.total||0), 0);
     totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0) + hotelTotal;
@@ -2070,6 +2143,7 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const hotelRows = allHotels.length
     ? allHotels.map(h=>`
         <tr style="background:#E7EEF7;">
+          <td>${h.reservation_date || ''}</td>
           <td>${h.booking_date || ''}</td>
           <td>${escapeHtml(h.reservation_name || '—')}</td>
           <td>${escapeHtml(h.hotel_name || '—')}</td>
@@ -2120,7 +2194,8 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     <h3 style="margin-top:22px; font-size:15px;">Hotel Bookings</h3>
     <table>
       <thead><tr>
-        <th style="text-align:left">Booking Date</th>
+        <th style="text-align:left">Reservation Date</th>
+        <th style="text-align:left">Stay Dates</th>
         <th style="text-align:left">Reservation Name</th>
         <th style="text-align:left">Hotel Name</th>
         <th style="text-align:center">Nights</th>
