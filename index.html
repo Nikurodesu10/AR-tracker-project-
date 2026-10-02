@@ -240,6 +240,8 @@
   .hist-list li{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px dashed var(--line);}
   #d_tickets li{cursor:pointer; padding:10px 8px 10px 8px; margin:0 -8px; border-radius:4px; border-left:3px solid transparent; transition:background .12s, border-color .12s;}
   #d_history li{cursor:pointer; padding:10px 8px 10px 8px; margin:0 -8px; border-radius:4px; border-left:3px solid transparent; transition:background .12s, border-color .12s;}
+  #d_hotels li{cursor:pointer; padding:10px 8px 10px 8px; margin:0 -8px; border-radius:4px; border-left:3px solid transparent; transition:background .12s, border-color .12s;}
+  #d_hotels li:hover{background:#FFFFFF; border-left-color:var(--amber); box-shadow:0 1px 4px rgba(28,43,51,.1);}
   #d_history li:hover{background:#FFFFFF; border-left-color:var(--amber); box-shadow:0 1px 4px rgba(28,43,51,.1);}
   #d_tickets li:hover{background:#FFFFFF; border-left-color:var(--amber); box-shadow:0 1px 4px rgba(28,43,51,.1);}
   .hist-list li:last-child{border-bottom:none;}
@@ -461,7 +463,7 @@
       <form id="newForm">
         <div class="grid2">
           <div class="field">
-            <label id="f_date_label">Booking Date</label>
+            <label>Booking Date</label>
             <input type="date" id="f_date" required>
           </div>
           <div class="field">
@@ -471,68 +473,54 @@
           </div>
         </div>
         <div class="field">
-          <label id="f_pname_label">Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span></label>
+          <label>Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span></label>
           <input type="text" id="f_pname" placeholder="Lead passenger for this ticket">
         </div>
-        <div id="flightOnlyFields">
-          <div class="grid2">
-            <div class="field">
-              <label>Departure Date</label>
-              <input type="date" id="f_depdate">
-            </div>
-            <div class="field">
-              <label id="f_route_label">Flight Route</label>
-              <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
-            </div>
-          </div>
-          <div class="grid2">
-            <div class="field">
-              <label>Departure Time</label>
-              <input type="time" id="f_deptime">
-            </div>
-            <div class="field">
-              <label>Arrival Time</label>
-              <input type="time" id="f_arrtime">
-            </div>
-          </div>
-          <div class="grid2">
-            <div class="field">
-              <label>Airline</label>
-              <select id="f_airline">
-                <option value="">Select airline</option>
-                <option value="Cebu Pacific">Cebu Pacific</option>
-                <option value="Philippine Airlines">Philippine Airlines</option>
-                <option value="Air Asia">Air Asia</option>
-                <option value="LGU">LGU</option>
-                <option value="__other__">Other…</option>
-              </select>
-              <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
-            </div>
-          </div>
-        </div>
-        <div id="hotelOnlyFields" style="display:none;">
+        <div class="grid2">
           <div class="field">
-            <label id="f_route_label_hotel">Hotel Name</label>
-            <input type="text" id="f_route_hotel" placeholder="e.g. Seda Capitol Central">
+            <label>Departure Date</label>
+            <input type="date" id="f_depdate">
+          </div>
+          <div class="field">
+            <label>Flight Route</label>
+            <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
           </div>
         </div>
         <div class="grid2">
-          <div class="field" id="f_pax_field">
-            <label id="f_pax_label"># of Pax</label>
+          <div class="field">
+            <label>Departure Time</label>
+            <input type="time" id="f_deptime">
+          </div>
+          <div class="field">
+            <label>Arrival Time</label>
+            <input type="time" id="f_arrtime">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Airline</label>
+            <select id="f_airline">
+              <option value="">Select airline</option>
+              <option value="Cebu Pacific">Cebu Pacific</option>
+              <option value="Philippine Airlines">Philippine Airlines</option>
+              <option value="Air Asia">Air Asia</option>
+              <option value="LGU">LGU</option>
+              <option value="__other__">Other…</option>
+            </select>
+            <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
+          </div>
+          <div class="field">
+            <label># of Pax</label>
             <input type="number" id="f_pax" step="1" min="1" placeholder="1" value="1">
           </div>
-          <div class="field" id="f_nights_field" style="display:none;">
-            <label># of Nights</label>
-            <input type="number" id="f_nights" step="1" min="1" placeholder="1" value="1">
-          </div>
         </div>
         <div class="grid2">
           <div class="field">
-            <label id="f_amount_label">Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span></label>
+            <label>Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span></label>
             <input type="number" id="f_amount" step="0.01" min="0" placeholder="0.00" required>
           </div>
           <div class="field">
-            <label id="f_total_label">Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span></label>
+            <label>Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span></label>
             <input type="number" id="f_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
           </div>
         </div>
@@ -556,6 +544,62 @@
       <button class="btn danger" id="deleteTicketBtn" style="display:none;">Delete Ticket</button>
       <button class="btn secondary" data-close="newOverlay">Cancel</button>
       <button class="btn" id="saveNewBtn">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= NEW/EDIT HOTEL BOOKING MODAL (fully separate from the ticket form) ================= -->
+<div class="overlay" id="hotelOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="hotelModalTitle">New Hotel Booking</h2>
+        <div class="rn" id="hotelModalSub">Record no. assigned automatically</div>
+      </div>
+      <button class="modal-close" data-close="hotelOverlay">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="hotelForm">
+        <div class="grid2">
+          <div class="field">
+            <label>Reservation Name</label>
+            <input type="text" id="h_reservation_name" placeholder="Name on the reservation">
+          </div>
+          <div class="field">
+            <label>Hotel Name</label>
+            <input type="text" id="h_hotel_name" placeholder="e.g. Seda Capitol Central">
+          </div>
+        </div>
+        <div class="field">
+          <label>Booking Date</label>
+          <input type="text" id="h_booking_date" placeholder="e.g. Nov 1, 2026">
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label># of Nights</label>
+            <input type="number" id="h_nights" step="1" min="1" placeholder="1" value="1">
+          </div>
+          <div class="field">
+            <label># of Rooms</label>
+            <input type="number" id="h_rooms" step="1" min="1" placeholder="1" value="1">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Rate per Room per Night</label>
+            <input type="number" id="h_rate" step="0.01" min="0" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Total <span style="font-weight:400; color:var(--text-dim);">(auto: nights × rooms × rate)</span></label>
+            <input type="number" id="h_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="deleteHotelBtn" style="display:none;">Delete Booking</button>
+      <button class="btn secondary" data-close="hotelOverlay">Cancel</button>
+      <button class="btn" id="saveHotelBtn">Save Booking</button>
     </div>
   </div>
 </div>
@@ -600,6 +644,9 @@
 
       <div class="section-label">Tickets Added</div>
       <ul class="hist-list" id="d_tickets"></ul>
+
+      <div class="section-label">Hotels Added</div>
+      <ul class="hist-list" id="d_hotels"></ul>
 
       <div class="section-label">Payment History</div>
       <ul class="hist-list" id="d_history"></ul>
@@ -1064,72 +1111,34 @@ function nameWithPax(name, pax){
   return (pax && pax > 1) ? `${name} et al.` : name;
 }
 
-/* ---------- Flight vs Hotel entry type ---------- */
-let entryType = 'flight'; // 'flight' | 'hotel'
-
-function setEntryType(type){
-  entryType = type;
-  const isHotel = type === 'hotel';
-
-  document.getElementById('flightOnlyFields').style.display = isHotel ? 'none' : 'block';
-  document.getElementById('hotelOnlyFields').style.display = isHotel ? 'block' : 'none';
-  document.getElementById('f_nights_field').style.display = isHotel ? 'block' : 'none';
-
-  // Booking Date loses its calendar picker for hotel — plain text instead.
-  const dateInput = document.getElementById('f_date');
-  const oldVal = dateInput.value;
-  const newType = isHotel ? 'text' : 'date';
-  if(dateInput.type !== newType){
-    dateInput.type = newType;
-    dateInput.value = oldVal;
-    dateInput.placeholder = isHotel ? 'e.g. Nov 1, 2026' : '';
-  }
-
-  document.getElementById('f_date_label').textContent = isHotel ? 'Booking Date' : 'Booking Date';
-  document.getElementById('f_pname_label').innerHTML = isHotel
-    ? 'Reservation Name'
-    : 'Passenger Name <span style="font-weight:400; color:var(--text-dim);">("et al." added automatically if pax &gt; 1)</span>';
-  document.getElementById('f_pax_label').textContent = isHotel ? '# of Rooms' : '# of Pax';
-  document.getElementById('f_amount_label').innerHTML = isHotel
-    ? 'Rate <span style="font-weight:400; color:var(--text-dim);">(per room per night)</span>'
-    : 'Ticket Amount <span style="font-weight:400; color:var(--text-dim);">(per pax)</span>';
-  document.getElementById('f_total_label').innerHTML = isHotel
-    ? 'Total <span style="font-weight:400; color:var(--text-dim);">(auto: nights × rooms × rate)</span>'
-    : 'Total <span style="font-weight:400; color:var(--text-dim);">(auto: pax × ticket)</span>';
-
-  recomputeFormTotal();
-  recomputeFormCapital();
-}
-
-/* Live-recompute the Total field — flight: amount × pax, hotel: amount × rooms × nights */
+/* Live-recompute the Total field as ticket amount / pax change */
 function recomputeFormTotal(){
   const amt = parseFloat(document.getElementById('f_amount').value) || 0;
   const pax = parseInt(document.getElementById('f_pax').value, 10) || 1;
-  if(entryType === 'hotel'){
-    const nights = parseInt(document.getElementById('f_nights').value, 10) || 1;
-    document.getElementById('f_total').value = (amt * pax * nights).toFixed(2);
-  } else {
-    document.getElementById('f_total').value = (amt * pax).toFixed(2);
-  }
+  document.getElementById('f_total').value = (amt * pax).toFixed(2);
 }
 document.getElementById('f_amount').addEventListener('input', recomputeFormTotal);
 document.getElementById('f_pax').addEventListener('input', recomputeFormTotal);
-document.getElementById('f_nights').addEventListener('input', recomputeFormTotal);
 
-/* Live-recompute the Total Capital field — same nights/rooms multiplier as Total */
+/* Live-recompute the Total Capital field as capital / pax change */
 function recomputeFormCapital(){
   const cap = parseFloat(document.getElementById('f_capital').value) || 0;
   const pax = parseInt(document.getElementById('f_pax').value, 10) || 1;
-  if(entryType === 'hotel'){
-    const nights = parseInt(document.getElementById('f_nights').value, 10) || 1;
-    document.getElementById('f_capital_total').value = (cap * pax * nights).toFixed(2);
-  } else {
-    document.getElementById('f_capital_total').value = (cap * pax).toFixed(2);
-  }
+  document.getElementById('f_capital_total').value = (cap * pax).toFixed(2);
 }
 document.getElementById('f_capital').addEventListener('input', recomputeFormCapital);
 document.getElementById('f_pax').addEventListener('input', recomputeFormCapital);
-document.getElementById('f_nights').addEventListener('input', recomputeFormCapital);
+
+/* Hotel booking Total: nights × rooms × rate per room per night */
+function recomputeHotelTotal(){
+  const nights = parseInt(document.getElementById('h_nights').value, 10) || 1;
+  const rooms = parseInt(document.getElementById('h_rooms').value, 10) || 1;
+  const rate = parseFloat(document.getElementById('h_rate').value) || 0;
+  document.getElementById('h_total').value = (nights * rooms * rate).toFixed(2);
+}
+document.getElementById('h_nights').addEventListener('input', recomputeHotelTotal);
+document.getElementById('h_rooms').addEventListener('input', recomputeHotelTotal);
+document.getElementById('h_rate').addEventListener('input', recomputeHotelTotal);
 
 /* "Other…" airline option reveals a free-text field */
 document.getElementById('f_airline').addEventListener('change', (e)=>{
@@ -1409,13 +1418,10 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('newModalSub').textContent = 'Record no. assigned automatically';
   document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
-  setEntryType('flight');
   document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
-  document.getElementById('f_route_hotel').value = '';
-  document.getElementById('f_nights').value = '1';
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
@@ -1438,11 +1444,9 @@ function openEditTicket(recordId, index){
   if(!t) return;
 
   editingTicket = { recordId, index };
-  const isHotel = t.type === 'hotel';
-  document.getElementById('newModalTitle').textContent = isHotel ? 'Edit Hotel Booking' : 'Edit Ticket';
+  document.getElementById('newModalTitle').textContent = 'Edit Ticket';
   document.getElementById('newModalSub').textContent = r.record_no;
   document.getElementById('deleteTicketBtn').style.display = 'inline-block';
-  setEntryType(isHotel ? 'hotel' : 'flight');
 
   document.getElementById('f_date').value = t.booking_date || t.date || '';
   const nameField = document.getElementById('f_name');
@@ -1453,27 +1457,18 @@ function openEditTicket(recordId, index){
   document.getElementById('f_pax').value = pax;
   const unit = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / pax);
   document.getElementById('f_amount').value = unit;
-
-  if(isHotel){
-    document.getElementById('f_route_hotel').value = t.flight_route || '';
-    const nights = t.nights || 1;
-    document.getElementById('f_nights').value = nights;
-    document.getElementById('f_total').value = (unit * pax * nights).toFixed(2);
-  } else {
-    document.getElementById('f_depdate').value = t.departure_date || '';
-    document.getElementById('f_route').value = t.flight_route || '';
-    document.getElementById('f_deptime').value = t.departure_time || '';
-    document.getElementById('f_arrtime').value = t.arrival_time || '';
-    setAirlineField(t.airline || '');
-    document.getElementById('f_total').value = (unit * pax).toFixed(2);
-  }
+  document.getElementById('f_depdate').value = t.departure_date || '';
+  document.getElementById('f_route').value = t.flight_route || '';
+  document.getElementById('f_deptime').value = t.departure_time || '';
+  document.getElementById('f_arrtime').value = t.arrival_time || '';
+  setAirlineField(t.airline || '');
+  document.getElementById('f_total').value = (unit * pax).toFixed(2);
 
   // Capital is tracked per ticket, so pre-fill it from the stored value.
   // Older tickets saved before this fix won't have it — treat those as 0.
   const capPerPax = (t.capital !== undefined && t.capital !== null) ? t.capital : 0;
   document.getElementById('f_capital').value = capPerPax || '';
-  const nightsForCap = isHotel ? (t.nights || 1) : 1;
-  document.getElementById('f_capital_total').value = (capPerPax * pax * nightsForCap).toFixed(2);
+  document.getElementById('f_capital_total').value = (capPerPax * pax).toFixed(2);
   document.getElementById('f_remark').value = '';
 
   detailOverlay.classList.remove('show');
@@ -1482,75 +1477,46 @@ function openEditTicket(recordId, index){
 
 document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const date = document.getElementById('f_date').value;
-  const unitAmount = parseFloat(document.getElementById('f_amount').value); // ticket price per pax, or rate per room per night
+  const unitAmount = parseFloat(document.getElementById('f_amount').value); // ticket price per pax
   const capitalPerPax = document.getElementById('f_capital').value === '' ? 0 : parseFloat(document.getElementById('f_capital').value);
   const typedName = document.getElementById('f_name').value.trim();
   const name = findExistingName(typedName); // reuses existing spelling/casing if it's the same account
   const passengerName = document.getElementById('f_pname').value.trim();
   const remark = document.getElementById('f_remark').value.trim();
 
+  const depDate = document.getElementById('f_depdate').value;
+  const route = document.getElementById('f_route').value.trim();
+  const depTime = document.getElementById('f_deptime').value;
+  const arrTime = document.getElementById('f_arrtime').value;
+  const airline = getSelectedAirline();
   const paxRaw = document.getElementById('f_pax').value;
   const pax = paxRaw === '' ? 1 : parseInt(paxRaw, 10);
   const paxCount = (isNaN(pax) || pax < 1) ? 1 : pax;
 
   if(!date || !name || isNaN(unitAmount) || unitAmount < 0 || isNaN(capitalPerPax) || capitalPerPax < 0){
-    alert('Please fill in booking date, account name, and a valid amount / capital.');
+    alert('Please fill in booking date, account name, and a valid ticket amount / capital.');
     return;
   }
 
-  let ticketEntry;
-  let total, capitalContribution;
+  const total = unitAmount * paxCount;          // # of Pax × Ticket Amount
+  const capitalContribution = capitalPerPax * paxCount; // # of Pax × Capital
 
-  if(entryType === 'hotel'){
-    const hotelName = document.getElementById('f_route_hotel').value.trim();
-    const nightsRaw = document.getElementById('f_nights').value;
-    const nights = (nightsRaw === '' || isNaN(parseInt(nightsRaw,10)) || parseInt(nightsRaw,10) < 1) ? 1 : parseInt(nightsRaw, 10);
-
-    total = unitAmount * paxCount * nights;              // nights × rooms × rate
-    capitalContribution = capitalPerPax * paxCount * nights;
-
-    ticketEntry = {
-      type: 'hotel',
-      date,
-      amount: total,
-      unit_amount: unitAmount,
-      booking_date: date,
-      passenger_name: passengerName,  // Reservation Name
-      flight_route: hotelName,        // Hotel Name
-      pax: paxCount,                  // # of Rooms
-      nights: nights,
-      total: total,
-      capital: capitalPerPax,
-      capital_total: capitalContribution
-    };
-  } else {
-    const depDate = document.getElementById('f_depdate').value;
-    const route = document.getElementById('f_route').value.trim();
-    const depTime = document.getElementById('f_deptime').value;
-    const arrTime = document.getElementById('f_arrtime').value;
-    const airline = getSelectedAirline();
-
-    total = unitAmount * paxCount;          // # of Pax × Ticket Amount
-    capitalContribution = capitalPerPax * paxCount; // # of Pax × Capital
-
-    ticketEntry = {
-      type: 'flight',
-      date, // booking date, kept as "date" for backward compatibility with older entries
-      amount: total,      // the full amount owed for this booking (feeds balance calc)
-      unit_amount: unitAmount,
-      booking_date: date,
-      passenger_name: passengerName,
-      departure_date: depDate,
-      flight_route: route,
-      departure_time: depTime,
-      arrival_time: arrTime,
-      airline: airline,
-      pax: paxCount,
-      total: total,
-      capital: capitalPerPax,           // per-pax capital cost for THIS ticket
-      capital_total: capitalContribution // capitalPerPax × pax — what this ticket contributed to the account's Capital total
-    };
-  }
+  const ticketEntry = {
+    date, // booking date, kept as "date" for backward compatibility with older entries
+    amount: total,      // the full amount owed for this booking (feeds balance calc)
+    unit_amount: unitAmount,
+    booking_date: date,
+    passenger_name: passengerName,
+    departure_date: depDate,
+    flight_route: route,
+    departure_time: depTime,
+    arrival_time: arrTime,
+    airline: airline,
+    pax: paxCount,
+    total: total,
+    capital: capitalPerPax,           // per-pax capital cost for THIS ticket
+    capital_total: capitalContribution // capitalPerPax × pax — what this ticket contributed to the account's Capital total
+  };
 
   let error;
 
@@ -1675,25 +1641,18 @@ function openDetail(id){
         li.addEventListener('click', ()=> openEditTicket(r.id, i));
       }
       const bits = [];
-      const isHotelEntry = t.type === 'hotel';
-      const typeTag = isHotelEntry ? '🏨 ' : '';
-      if(isHotelEntry){
-        if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
-        if(t.flight_route) bits.push(escapeHtml(t.flight_route));
-        if(t.nights) bits.push(`${t.nights} night${t.nights===1?'':'s'}`);
-        if(t.pax) bits.push(`${t.pax} room${t.pax===1?'':'s'}`);
-      } else {
-        if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
-        if(t.flight_route) bits.push(escapeHtml(t.flight_route));
-        if(t.airline) bits.push(escapeHtml(t.airline));
-        if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + formatTime12(t.departure_time) : ''}`);
-        if(t.pax) bits.push(`${t.pax} pax`);
-      }
+      if(t.passenger_name) bits.push(escapeHtml(t.passenger_name));
+      if(t.flight_route) bits.push(escapeHtml(t.flight_route));
+      if(t.airline) bits.push(escapeHtml(t.airline));
+      if(t.departure_date) bits.push(`Dep. ${t.departure_date}${t.departure_time ? ' ' + formatTime12(t.departure_time) : ''}`);
+      if(t.pax) bits.push(`${t.pax} pax`);
       const detailLine = bits.length ? `<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${bits.join(' · ')}</div>` : '';
-      li.innerHTML = `<div class="hd">${typeTag}Booked ${t.date}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
+      li.innerHTML = `<div class="hd">Booked ${t.date}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(t.amount)}</span>`;
       ticketsEl.appendChild(li);
     });
   }
+
+  renderHotels(r);
 
   const histEl = document.getElementById('d_history');
   histEl.innerHTML = '';
@@ -1820,19 +1779,18 @@ document.getElementById('deletePaymentBtn').addEventListener('click', async ()=>
   openDetail(recordId);
 });
 
-function resetTicketFormForAdd(r, type, title){
+document.getElementById('addTicketBtn').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id === currentDetailId);
+  if(!r) return;
   editingTicket = null;
-  document.getElementById('newModalTitle').textContent = title;
+  document.getElementById('newModalTitle').textContent = 'New Ticket';
   document.getElementById('newModalSub').textContent = r.record_no;
   document.getElementById('deleteTicketBtn').style.display = 'none';
   document.getElementById('newForm').reset();
-  setEntryType(type);
-  document.getElementById('f_date').value = type === 'hotel' ? '' : new Date().toISOString().slice(0,10);
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f_capital').value = '';
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
-  document.getElementById('f_route_hotel').value = '';
-  document.getElementById('f_nights').value = '1';
   document.getElementById('f_deptime').value = '';
   document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
@@ -1844,21 +1802,167 @@ function resetTicketFormForAdd(r, type, title){
   document.getElementById('f_pname').value = '';
   const nameField = document.getElementById('f_name');
   nameField.value = r.customer_name;
-  nameField.disabled = true; // locked so this entry definitely lands under the same account
+  nameField.disabled = true; // locked so this ticket definitely lands under the same account
   detailOverlay.classList.remove('show');
   newOverlay.classList.add('show');
-}
-
-document.getElementById('addTicketBtn').addEventListener('click', ()=>{
-  const r = records.find(x=>x.id === currentDetailId);
-  if(!r) return;
-  resetTicketFormForAdd(r, 'flight', 'New Ticket');
 });
 
 document.getElementById('addHotelBtn').addEventListener('click', ()=>{
   const r = records.find(x=>x.id === currentDetailId);
   if(!r) return;
-  resetTicketFormForAdd(r, 'hotel', 'New Hotel Booking');
+  openNewHotelForm(r);
+});
+
+/* ---------- Hotel Bookings — fully independent of the ticket form/data ---------- */
+const hotelOverlay = document.getElementById('hotelOverlay');
+let editingHotel = null; // { recordId, index } when editing an existing booking, else null
+
+function renderHotels(r){
+  const listEl = document.getElementById('d_hotels');
+  listEl.innerHTML = '';
+  const hHist = r.hotel_history || [];
+  if(hHist.length === 0){
+    listEl.innerHTML = '<div class="hist-empty">No hotel bookings recorded yet.</div>';
+    return;
+  }
+  const indexed = hHist.map((h, i) => ({h, i}));
+  indexed.slice().reverse().forEach(({h, i})=>{
+    const li = document.createElement('li');
+    if(canEdit()){
+      li.style.cursor = 'pointer';
+      li.title = 'Click to edit this booking';
+      li.addEventListener('click', ()=> openEditHotel(r.id, i));
+    }
+    const bits = [];
+    if(h.reservation_name) bits.push(escapeHtml(h.reservation_name));
+    if(h.hotel_name) bits.push(escapeHtml(h.hotel_name));
+    bits.push(`${h.nights||1} night${(h.nights||1)===1?'':'s'}`);
+    bits.push(`${h.rooms||1} room${(h.rooms||1)===1?'':'s'}`);
+    const detailLine = `<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${bits.join(' · ')}</div>`;
+    li.innerHTML = `<div class="hd">🏨 ${h.booking_date || ''}${detailLine}</div><span class="ha" style="color:var(--ink-soft);">${peso(h.total)}</span>`;
+    listEl.appendChild(li);
+  });
+}
+
+function openNewHotelForm(r){
+  editingHotel = null;
+  document.getElementById('hotelModalTitle').textContent = 'New Hotel Booking';
+  document.getElementById('hotelModalSub').textContent = r.record_no;
+  document.getElementById('deleteHotelBtn').style.display = 'none';
+  document.getElementById('hotelForm').reset();
+  document.getElementById('h_reservation_name').value = '';
+  document.getElementById('h_hotel_name').value = '';
+  document.getElementById('h_booking_date').value = '';
+  document.getElementById('h_nights').value = '1';
+  document.getElementById('h_rooms').value = '1';
+  document.getElementById('h_rate').value = '';
+  document.getElementById('h_total').value = '';
+  detailOverlay.classList.remove('show');
+  hotelOverlay.classList.add('show');
+}
+
+function openEditHotel(recordId, index){
+  const r = records.find(x=>x.id === recordId);
+  if(!r) return;
+  const h = (r.hotel_history || [])[index];
+  if(!h) return;
+
+  editingHotel = { recordId, index };
+  document.getElementById('hotelModalTitle').textContent = 'Edit Hotel Booking';
+  document.getElementById('hotelModalSub').textContent = r.record_no;
+  document.getElementById('deleteHotelBtn').style.display = 'inline-block';
+  document.getElementById('h_reservation_name').value = h.reservation_name || '';
+  document.getElementById('h_hotel_name').value = h.hotel_name || '';
+  document.getElementById('h_booking_date').value = h.booking_date || '';
+  document.getElementById('h_nights').value = h.nights || 1;
+  document.getElementById('h_rooms').value = h.rooms || 1;
+  document.getElementById('h_rate').value = h.rate || '';
+  document.getElementById('h_total').value = h.total || '';
+
+  detailOverlay.classList.remove('show');
+  hotelOverlay.classList.add('show');
+}
+
+document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
+  const reservationName = document.getElementById('h_reservation_name').value.trim();
+  const hotelName = document.getElementById('h_hotel_name').value.trim();
+  const bookingDate = document.getElementById('h_booking_date').value.trim();
+  const nightsRaw = document.getElementById('h_nights').value;
+  const roomsRaw = document.getElementById('h_rooms').value;
+  const rate = parseFloat(document.getElementById('h_rate').value) || 0;
+
+  const nights = (nightsRaw === '' || isNaN(parseInt(nightsRaw,10)) || parseInt(nightsRaw,10) < 1) ? 1 : parseInt(nightsRaw, 10);
+  const rooms = (roomsRaw === '' || isNaN(parseInt(roomsRaw,10)) || parseInt(roomsRaw,10) < 1) ? 1 : parseInt(roomsRaw, 10);
+  const total = nights * rooms * rate;
+
+  if(!hotelName){
+    alert('Enter a hotel name.');
+    return;
+  }
+
+  const hotelEntry = {
+    reservation_name: reservationName,
+    hotel_name: hotelName,
+    booking_date: bookingDate,
+    nights: nights,
+    rooms: rooms,
+    rate: rate,
+    total: total
+  };
+
+  let targetRecordId;
+  let error;
+
+  if(editingHotel){
+    const record = records.find(r => r.id === editingHotel.recordId);
+    if(!record){ alert('Could not find that record.'); return; }
+    const newHotelHistory = [...(record.hotel_history || [])];
+    newHotelHistory[editingHotel.index] = hotelEntry;
+    targetRecordId = record.id;
+    ({ error } = await withRetry(() => supabase.from('ar_records').update({
+      hotel_history: newHotelHistory
+    }).eq('id', record.id)));
+  } else {
+    const record = records.find(r => r.id === currentDetailId);
+    if(!record){ alert('Could not find that record.'); return; }
+    const newHotelHistory = [...(record.hotel_history || []), hotelEntry];
+    targetRecordId = record.id;
+    ({ error } = await withRetry(() => supabase.from('ar_records').update({
+      hotel_history: newHotelHistory
+    }).eq('id', record.id)));
+  }
+
+  if(error){
+    alert('Could not save: ' + error.message);
+    return;
+  }
+  hotelOverlay.classList.remove('show');
+  editingHotel = null;
+  await loadRecords();
+  openDetail(targetRecordId);
+});
+
+document.getElementById('deleteHotelBtn').addEventListener('click', async ()=>{
+  if(!editingHotel) return;
+  if(!confirm('Delete this hotel booking permanently? This cannot be undone.')) return;
+
+  const record = records.find(r => r.id === editingHotel.recordId);
+  if(!record) return;
+  const newHotelHistory = (record.hotel_history || []).filter((_, i) => i !== editingHotel.index);
+
+  const { error } = await withRetry(() => supabase.from('ar_records').update({
+    hotel_history: newHotelHistory
+  }).eq('id', record.id));
+
+  if(error){
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  hotelOverlay.classList.remove('show');
+  const recordId = editingHotel.recordId;
+  editingHotel = null;
+  await loadRecords();
+  openDetail(recordId);
 });
 
 document.getElementById('printBtn').addEventListener('click', ()=>{
@@ -1882,6 +1986,13 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   });
   allTickets.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
 
+  // Every hotel booking ever added for this customer, oldest first
+  let allHotels = [];
+  custRecords.forEach(r=>{
+    (r.hotel_history || []).forEach(h=> allHotels.push(h));
+  });
+  allHotels.sort((a,b)=> (a.booking_date||'').localeCompare(b.booking_date||''));
+
   // Combined payment history across this customer's record(s)
   let allPayments = [];
   custRecords.forEach(r=>{
@@ -1891,17 +2002,21 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
 
   let totalTicket, totalPaid, totalBalance;
   if(!hasRange){
-    // Full account history — use the account's real running totals.
+    // Full account history — use the account's real running totals
+    // (ticket_amount already includes hotel charges, per the DB trigger).
     totalTicket = custRecords.reduce((s,r)=>s + Number(r.ticket_amount||0), 0);
     totalPaid = custRecords.reduce((s,r)=>s + Number(r.amount_paid||0), 0);
     totalBalance = custRecords.reduce((s,r)=>s + Number(r.balance||0), 0);
   } else {
-    // A snapshot of a specific date range — filter both tickets and
-    // payments to it, and total what happened within those days.
+    // A snapshot of a specific date range — filter tickets, hotels, and
+    // payments to it, and total what happened within those days. Hotel
+    // bookings are filtered by their own booking_date, same idea as tickets.
     const inRange = d => (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
     allTickets = allTickets.filter(t => inRange(t.booking_date || t.date));
+    allHotels = allHotels.filter(h => inRange(h.booking_date));
     allPayments = allPayments.filter(p => inRange(p.date));
-    totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0);
+    const hotelTotal = allHotels.reduce((s,h)=> s + Number(h.total||0), 0);
+    totalTicket = allTickets.reduce((s,t)=> s + Number(t.amount||0), 0) + hotelTotal;
     totalPaid = allPayments.reduce((s,p)=> s + Number(p.amount||0), 0);
     totalBalance = totalTicket - totalPaid;
   }
@@ -1932,19 +2047,15 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
         const status = ticketPaidStatus[idx];
         const rowStyle = status === 'paid' ? ' style="background:#FBF1DC;"' : '';
         const statusLabel = status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid';
-        const isHotelEntry = t.type === 'hotel';
-        // Hotel rows reuse the same columns: Departure Date/Time become
-        // blank (not applicable), Airline becomes the nights count, and
-        // Pax becomes the room count.
         return `
         <tr${rowStyle}>
           <td>${t.booking_date || t.date || ''}</td>
-          <td>${isHotelEntry ? '—' : (t.departure_date || t.date || '')}</td>
-          <td>${isHotelEntry ? '—' : (t.departure_time ? formatTime12(t.departure_time) : '—')}</td>
+          <td>${t.departure_date || t.date || ''}</td>
+          <td>${t.departure_time ? formatTime12(t.departure_time) : '—'}</td>
           <td>${escapeHtml(t.passenger_name || '—')}</td>
-          <td>${isHotelEntry ? '🏨 ' : ''}${escapeHtml(t.flight_route || '—')}</td>
-          <td>${isHotelEntry ? `${t.nights || 1} night${(t.nights||1)===1?'':'s'}` : escapeHtml(t.airline || '—')}</td>
-          <td style="text-align:center">${t.pax || 1}${isHotelEntry ? ' rm' : ''}</td>
+          <td>${escapeHtml(t.flight_route || '—')}</td>
+          <td>${escapeHtml(t.airline || '—')}</td>
+          <td style="text-align:center">${t.pax || 1}</td>
           <td style="text-align:right">${peso(rate)}</td>
           <td style="text-align:right">${peso(t.amount)}</td>
           <td style="text-align:center">${statusLabel}</td>
@@ -1955,6 +2066,19 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
     : '<tr><td colspan="2">No payments recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
+
+  const hotelRows = allHotels.length
+    ? allHotels.map(h=>`
+        <tr style="background:#E7EEF7;">
+          <td>${h.booking_date || ''}</td>
+          <td>${escapeHtml(h.reservation_name || '—')}</td>
+          <td>${escapeHtml(h.hotel_name || '—')}</td>
+          <td style="text-align:center">${h.nights || 1}</td>
+          <td style="text-align:center">${h.rooms || 1}</td>
+          <td style="text-align:right">${peso(h.rate)}</td>
+          <td style="text-align:right">${peso(h.total)}</td>
+        </tr>`).join('')
+    : '';
 
   const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
   const rangeLabel = fromDate && toDate ? `${fmtDate(fromDate)} – ${fmtDate(toDate)}`
@@ -1991,6 +2115,21 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
       </tr></thead>
       <tbody>${ticketRows}</tbody>
     </table>
+
+    ${allHotels.length > 0 ? `
+    <h3 style="margin-top:22px; font-size:15px;">Hotel Bookings</h3>
+    <table>
+      <thead><tr>
+        <th style="text-align:left">Booking Date</th>
+        <th style="text-align:left">Reservation Name</th>
+        <th style="text-align:left">Hotel Name</th>
+        <th style="text-align:center">Nights</th>
+        <th style="text-align:center">Rooms</th>
+        <th style="text-align:right">Rate per Room/Night</th>
+        <th style="text-align:right">Total</th>
+      </tr></thead>
+      <tbody>${hotelRows}</tbody>
+    </table>` : ''}
 
     <div style="margin-top:4px;">
       <div class="totals" style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid #333;">
@@ -2231,6 +2370,8 @@ function applyRolePermissions(){
     if(remark) remark.setAttribute('readonly', 'readonly');
     const deleteTicketBtn = document.getElementById('deleteTicketBtn');
     if(deleteTicketBtn) deleteTicketBtn.style.display = 'none';
+    const deleteHotelBtn = document.getElementById('deleteHotelBtn');
+    if(deleteHotelBtn) deleteHotelBtn.style.display = 'none';
   }
 
   if(isSuperAdmin()){
