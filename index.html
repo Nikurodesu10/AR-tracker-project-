@@ -611,15 +611,9 @@
             <input type="number" id="h_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
           </div>
         </div>
-        <div class="grid2">
-          <div class="field">
-            <label>Capital <span style="font-weight:400; color:var(--text-dim);">(per room per night)</span></label>
-            <input type="number" id="h_capital" step="0.01" min="0" placeholder="0.00 (cost tied to this booking)">
-          </div>
-          <div class="field">
-            <label>Total Capital <span style="font-weight:400; color:var(--text-dim);">(auto: nights × rooms × capital)</span></label>
-            <input type="number" id="h_capital_total" step="0.01" min="0" placeholder="0.00" readonly style="background:var(--paper);">
-          </div>
+        <div class="field">
+          <label>Capital <span style="font-weight:400; color:var(--text-dim);">(total cost for this booking)</span></label>
+          <input type="number" id="h_capital" step="0.01" min="0" placeholder="0.00">
         </div>
       </form>
     </div>
@@ -648,9 +642,20 @@
           <div class="val mono" id="d_capital">₱0.00</div>
         </div>
         <div class="t-block">
-          <div class="label">Ticket Amount <span style="text-transform:none; letter-spacing:0; color:#8198A2;">(tickets + hotels)</span></div>
+          <div class="label">Ticket Total</div>
+          <div class="val mono" id="d_ticket_only">₱0.00</div>
+        </div>
+        <div class="t-block">
+          <div class="label">Hotel Total</div>
+          <div class="val mono" id="d_hotel_only">₱0.00</div>
+        </div>
+        <div class="t-block">
+          <div class="label">Overall Total</div>
           <div class="val mono" id="d_ticket">₱0.00</div>
-          <div style="font-size:10.5px; color:#8198A2; margin-top:3px; font-family:'IBM Plex Mono',monospace;" id="d_ticket_breakdown"></div>
+        </div>
+        <div class="t-block">
+          <div class="label">Income</div>
+          <div class="val mono" id="d_income">₱0.00</div>
         </div>
         <div class="t-block">
           <div class="label">Paid to Date</div>
@@ -1168,16 +1173,6 @@ document.getElementById('h_nights').addEventListener('input', recomputeHotelTota
 document.getElementById('h_rooms').addEventListener('input', recomputeHotelTotal);
 document.getElementById('h_rate').addEventListener('input', recomputeHotelTotal);
 
-function recomputeHotelCapital(){
-  const nights = parseInt(document.getElementById('h_nights').value, 10) || 1;
-  const rooms = parseInt(document.getElementById('h_rooms').value, 10) || 1;
-  const cap = parseFloat(document.getElementById('h_capital').value) || 0;
-  document.getElementById('h_capital_total').value = (nights * rooms * cap).toFixed(2);
-}
-document.getElementById('h_nights').addEventListener('input', recomputeHotelCapital);
-document.getElementById('h_rooms').addEventListener('input', recomputeHotelCapital);
-document.getElementById('h_capital').addEventListener('input', recomputeHotelCapital);
-
 /* Nights can be auto-calculated from Check-in/Check-out, or typed in
    manually — the checkbox decides which. */
 function recomputeHotelNights(){
@@ -1687,16 +1682,18 @@ function openDetail(id){
   document.getElementById('d_name').textContent = r.customer_name;
   document.getElementById('d_recordNo').textContent = `${r.record_no} · ${r.entry_date}`;
   document.getElementById('d_capital').textContent = peso(r.capital);
-  document.getElementById('d_ticket').textContent = peso(r.ticket_amount);
+  document.getElementById('d_ticket').textContent = peso(r.ticket_amount); // overall total: tickets + hotels
   document.getElementById('d_paid').textContent = peso(r.amount_paid);
   document.getElementById('d_balance').textContent = peso(r.balance);
   document.getElementById('d_remark').value = r.remark || '';
 
-  // Ticket Amount above is tickets + hotels combined — show the split too.
+  // Ticket Total and Hotel Total shown separately; Capital and Income
+  // stay as single combined figures based on the overall total.
   const ticketTotalOnly = (r.ticket_history || []).reduce((s,t)=> s + Number(t.amount||0), 0);
   const hotelTotalOnly = (r.hotel_history || []).reduce((s,h)=> s + Number(h.total||0), 0);
-  document.getElementById('d_ticket_breakdown').textContent =
-    `Tickets ${peso(ticketTotalOnly)} · Hotels ${peso(hotelTotalOnly)}`;
+  document.getElementById('d_ticket_only').textContent = peso(ticketTotalOnly);
+  document.getElementById('d_hotel_only').textContent = peso(hotelTotalOnly);
+  document.getElementById('d_income').textContent = peso(Number(r.ticket_amount||0) - Number(r.capital||0));
 
   const pct = paidPct(r);
   document.getElementById('d_pie').innerHTML = pieSvg(pct, 56);
@@ -1938,7 +1935,6 @@ function openNewHotelForm(r){
   document.getElementById('h_rate').value = '';
   document.getElementById('h_total').value = '';
   document.getElementById('h_capital').value = '';
-  document.getElementById('h_capital_total').value = '';
   setHotelNightsMode(true);
   detailOverlay.classList.remove('show');
   hotelOverlay.classList.add('show');
@@ -1964,8 +1960,7 @@ function openEditHotel(recordId, index){
   document.getElementById('h_rooms').value = h.rooms || 1;
   document.getElementById('h_rate').value = h.rate || '';
   document.getElementById('h_total').value = h.total || '';
-  document.getElementById('h_capital').value = h.capital || '';
-  document.getElementById('h_capital_total').value = h.capital_total || '';
+  document.getElementById('h_capital').value = h.capital_total || '';
   setHotelNightsMode(document.getElementById('h_auto_nights').checked);
 
   detailOverlay.classList.remove('show');
@@ -1982,12 +1977,11 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
   const nightsRaw = document.getElementById('h_nights').value;
   const roomsRaw = document.getElementById('h_rooms').value;
   const rate = parseFloat(document.getElementById('h_rate').value) || 0;
-  const capitalPerRoom = parseFloat(document.getElementById('h_capital').value) || 0;
+  const capitalContribution = parseFloat(document.getElementById('h_capital').value) || 0; // flat total, no formula
 
   const nights = (nightsRaw === '' || isNaN(parseInt(nightsRaw,10)) || parseInt(nightsRaw,10) < 1) ? 1 : parseInt(nightsRaw, 10);
   const rooms = (roomsRaw === '' || isNaN(parseInt(roomsRaw,10)) || parseInt(roomsRaw,10) < 1) ? 1 : parseInt(roomsRaw, 10);
   const total = nights * rooms * rate;
-  const capitalContribution = nights * rooms * capitalPerRoom;
 
   if(!hotelName){
     alert('Enter a hotel name.');
@@ -2014,8 +2008,7 @@ document.getElementById('saveHotelBtn').addEventListener('click', async ()=>{
     rooms: rooms,
     rate: rate,
     total: total,
-    capital: capitalPerRoom,           // per room per night
-    capital_total: capitalContribution // nights × rooms × capital
+    capital_total: capitalContribution // flat total cost for this booking
   };
 
   let targetRecordId;
