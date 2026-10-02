@@ -939,6 +939,7 @@ document.getElementById('myProfileBtn').addEventListener('click', async ()=>{
   const { data } = await supabase.from('app_users').select('*').eq('username', username);
   const row = data && data[0];
   document.getElementById('pf_display_name').value = (row && row.display_name) || '';
+  resetModalSize(profileOverlay);
   profileOverlay.classList.add('show');
 });
 
@@ -1114,6 +1115,7 @@ document.getElementById('trendChartBtn').addEventListener('click', ()=>{
   // but this blocks it outright even if someone forces it visible via devtools.
   if(!isSuperAdmin()) return;
   renderTrendChart();
+  resetModalSize(trendChartOverlay);
   trendChartOverlay.classList.add('show');
 });
 
@@ -1358,6 +1360,7 @@ document.getElementById('arBackBtn').addEventListener('click', showArFolders);
 const arFolderOverlay = document.getElementById('arFolderOverlay');
 document.getElementById('arAddFolderBtn').addEventListener('click', ()=>{
   document.getElementById('arFolderName').value = '';
+  resetModalSize(arFolderOverlay);
   arFolderOverlay.classList.add('show');
 });
 document.getElementById('arSaveFolderBtn').addEventListener('click', async ()=>{
@@ -1463,6 +1466,19 @@ function renderTable(){
   });
 }
 
+/* Modals are reused DOM elements shared across every account/ticket/hotel
+   opened — if someone drags one smaller or larger via the resize handle,
+   that size otherwise sticks around for the next thing opened in it,
+   which can garble a layout that needed more room. This clears it back
+   to the default CSS size every time a modal is (re)opened. */
+function resetModalSize(overlayEl){
+  const modalEl = overlayEl.querySelector('.modal');
+  if(modalEl){
+    modalEl.style.width = '';
+    modalEl.style.height = '';
+  }
+}
+
 function escapeHtml(s){
   const d = document.createElement('div');
   d.textContent = s;
@@ -1499,6 +1515,7 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   const nameField = document.getElementById('f_name');
   nameField.disabled = false;
   nameField.value = '';
+  resetModalSize(newOverlay);
   newOverlay.classList.add('show');
 });
 
@@ -1537,6 +1554,7 @@ function openEditTicket(recordId, index){
   document.getElementById('f_remark').value = '';
 
   detailOverlay.classList.remove('show');
+  resetModalSize(newOverlay);
   newOverlay.classList.add('show');
 }
 
@@ -1753,6 +1771,7 @@ function openDetail(id){
   document.getElementById('d_printFrom').value = '';
   document.getElementById('d_printTo').value = '';
 
+  resetModalSize(detailOverlay);
   detailOverlay.classList.add('show');
 }
 
@@ -1794,6 +1813,7 @@ function openEditPayment(recordId, index){
   editingPayment = { recordId, index };
   document.getElementById('pe_date').value = p.date || '';
   document.getElementById('pe_amount').value = p.amount || '';
+  resetModalSize(paymentOverlay);
   paymentOverlay.classList.add('show');
 }
 
@@ -1877,6 +1897,7 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   nameField.value = r.customer_name;
   nameField.disabled = true; // locked so this ticket definitely lands under the same account
   detailOverlay.classList.remove('show');
+  resetModalSize(newOverlay);
   newOverlay.classList.add('show');
 });
 
@@ -1937,6 +1958,7 @@ function openNewHotelForm(r){
   document.getElementById('h_capital').value = '';
   setHotelNightsMode(true);
   detailOverlay.classList.remove('show');
+  resetModalSize(hotelOverlay);
   hotelOverlay.classList.add('show');
 }
 
@@ -1964,6 +1986,7 @@ function openEditHotel(recordId, index){
   setHotelNightsMode(document.getElementById('h_auto_nights').checked);
 
   detailOverlay.classList.remove('show');
+  resetModalSize(hotelOverlay);
   hotelOverlay.classList.add('show');
 }
 
@@ -2532,6 +2555,7 @@ document.getElementById('manageUsersBtn').addEventListener('click', ()=>{
   document.getElementById('nu_password').value = '';
   document.getElementById('nu_role').value = 'staff';
   loadUsers();
+  resetModalSize(usersOverlay);
   usersOverlay.classList.add('show');
 });
 
