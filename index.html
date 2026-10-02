@@ -226,11 +226,12 @@
   .modal-foot{flex-shrink:0; padding:16px 26px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px;}
 
   .ticket-strip{
-    display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; background:var(--ink); color:var(--paper); border-radius:4px; padding:16px 18px; margin-bottom:20px;
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:16px 14px;
+    background:var(--ink); color:var(--paper); border-radius:4px; padding:16px 18px; margin-bottom:20px;
   }
-  .ticket-strip .t-block{flex:1; min-width:100px;}
+  .ticket-strip .t-block{min-width:0;}
   .ticket-strip .t-block .label{font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#9FB3BC; margin-bottom:4px;}
-  .ticket-strip .t-block .val{font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600;}
+  .ticket-strip .t-block .val{font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600; overflow-wrap:break-word;}
   .ticket-strip .t-block.bal .val{color:#F0C36D;}
 
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -2398,8 +2399,16 @@ document.querySelectorAll('[data-close]').forEach(btn=>{
   });
 });
 document.querySelectorAll('.overlay').forEach(ov=>{
+  // Require the press AND release to both land on the backdrop itself —
+  // a plain click check alone also fires after dragging a modal's resize
+  // handle past its max size (mousedown on the modal, mouseup ends up
+  // over the backdrop beyond the clamped edge), which would otherwise
+  // close the modal the instant someone finishes resizing it.
+  let downOnOverlay = false;
+  ov.addEventListener('mousedown', (e)=>{ downOnOverlay = (e.target === ov); });
   ov.addEventListener('click', (e)=>{
-    if(e.target === ov) ov.classList.remove('show');
+    if(downOnOverlay && e.target === ov) ov.classList.remove('show');
+    downOnOverlay = false;
   });
 });
 
