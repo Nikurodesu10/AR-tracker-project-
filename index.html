@@ -757,7 +757,10 @@
       <button class="modal-close" data-close="usersOverlay">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="section-label">Existing Accounts</div>
+      <div class="section-label" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <span>Existing Accounts</span>
+        <button class="btn secondary" id="showPasswordsBtn" style="padding:4px 10px; font-size:12px;">Show Passwords</button>
+      </div>
       <ul class="hist-list" id="usersList"></ul>
 
       <div class="section-label">Add New User</div>
@@ -2540,6 +2543,8 @@ function applyRolePermissions(){
 
 /* ---------- Manage Users (Super Admin only) ---------- */
 const usersOverlay = document.getElementById('usersOverlay');
+const MANAGE_USERS_PASSCODE = '06222003';
+let passwordsVisible = false;
 
 async function loadUsers(){
   const { data, error } = await supabase.from('app_users').select('*').order('created_at', {ascending:true});
@@ -2551,8 +2556,11 @@ async function loadUsers(){
   }
   (data || []).forEach(u=>{
     const li = document.createElement('li');
+    const passwordLine = passwordsVisible
+      ? `<div style="font-size:12px; color:#555; margin-top:2px;">Password: <code>${escapeHtml(u.password)}</code></div>`
+      : '';
     li.innerHTML = `
-      <span class="hd"><strong>${escapeHtml(u.username)}</strong> — ${escapeHtml(u.role)}</span>
+      <span class="hd"><strong>${escapeHtml(u.username)}</strong> — ${escapeHtml(u.role)}${passwordLine}</span>
       <button class="btn danger" style="padding:5px 10px; font-size:12px;" data-user-id="${u.id}">Delete</button>
     `;
     li.querySelector('button').addEventListener('click', async ()=>{
@@ -2569,10 +2577,22 @@ async function loadUsers(){
   });
 }
 
+document.getElementById('showPasswordsBtn').addEventListener('click', ()=>{
+  const code = prompt('Enter passcode to view passwords:');
+  if(code === null) return; // cancelled
+  if(code !== MANAGE_USERS_PASSCODE){
+    alert('Incorrect passcode.');
+    return;
+  }
+  passwordsVisible = true;
+  loadUsers();
+});
+
 document.getElementById('manageUsersBtn').addEventListener('click', ()=>{
   document.getElementById('nu_username').value = '';
   document.getElementById('nu_password').value = '';
   document.getElementById('nu_role').value = 'staff';
+  passwordsVisible = false;
   loadUsers();
   resetModalSize(usersOverlay);
   usersOverlay.classList.add('show');
