@@ -432,8 +432,8 @@
             <th>No.</th>
             <th>Booking Date</th>
             <th>Account Name</th>
-            <th>Departure Date</th>
-            <th>Flight Route</th>
+            <th>Departure / Check-in Date</th>
+            <th>Flight Route / Hotel Name</th>
             <th style="text-align:right">Ticket Amount</th>
             <th style="text-align:right">Balance</th>
             <th>Status</th>
@@ -480,22 +480,18 @@
         </div>
         <div class="grid2">
           <div class="field">
-            <label>Departure Date</label>
+            <label>Departure / Check-in Date</label>
             <input type="date" id="f_depdate">
           </div>
           <div class="field">
-            <label>Flight Route</label>
-            <input type="text" id="f_route" placeholder="e.g. MNL–CEB">
+            <label>Flight Route / Hotel Name</label>
+            <input type="text" id="f_route" placeholder="e.g. MNL–CEB or hotel name">
           </div>
         </div>
         <div class="grid2">
           <div class="field">
             <label>Departure Time</label>
             <input type="time" id="f_deptime">
-          </div>
-          <div class="field">
-            <label>Arrival Time</label>
-            <input type="time" id="f_arrtime">
           </div>
         </div>
         <div class="grid2">
@@ -506,7 +502,7 @@
               <option value="Cebu Pacific">Cebu Pacific</option>
               <option value="Philippine Airlines">Philippine Airlines</option>
               <option value="Air Asia">Air Asia</option>
-              <option value="LGU">LGU</option>
+              <option value="Hotel">Hotel</option>
               <option value="__other__">Other…</option>
             </select>
             <input type="text" id="f_airline_other" placeholder="Airline name" style="margin-top:8px; display:none;">
@@ -713,7 +709,6 @@
     <div class="modal-foot">
       <button class="btn danger" id="deleteBtn">Delete Record</button>
       <button class="btn secondary" id="addTicketBtn">+ Add Ticket</button>
-      <button class="btn secondary" id="addHotelBtn">+ Add Hotel</button>
       <button class="btn secondary" id="printBtn">Print / Save PDF</button>
       <button class="btn" id="saveDetailBtn">Save Changes</button>
     </div>
@@ -1234,7 +1229,8 @@ function getSelectedAirline(){
 function setAirlineField(value){
   const sel = document.getElementById('f_airline');
   const otherField = document.getElementById('f_airline_other');
-  const known = ['Cebu Pacific','Philippine Airlines','Air Asia','LGU'];
+  const known = ['Cebu Pacific','Philippine Airlines','Air Asia','Hotel'];
+  if(value === 'LGU') value = 'Hotel'; // legacy entries
   if(!value){
     sel.value = '';
     otherField.value = '';
@@ -1513,7 +1509,6 @@ document.getElementById('newRecordBtn').addEventListener('click', ()=>{
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
   document.getElementById('f_deptime').value = '';
-  document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
   document.getElementById('f_airline_other').value = '';
   document.getElementById('f_airline_other').style.display = 'none';
@@ -1551,7 +1546,6 @@ function openEditTicket(recordId, index){
   document.getElementById('f_depdate').value = t.departure_date || '';
   document.getElementById('f_route').value = t.flight_route || '';
   document.getElementById('f_deptime').value = t.departure_time || '';
-  document.getElementById('f_arrtime').value = t.arrival_time || '';
   setAirlineField(t.airline || '');
   document.getElementById('f_total').value = (unit * pax).toFixed(2);
 
@@ -1579,7 +1573,6 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
   const depDate = document.getElementById('f_depdate').value;
   const route = document.getElementById('f_route').value.trim();
   const depTime = document.getElementById('f_deptime').value;
-  const arrTime = document.getElementById('f_arrtime').value;
   const airline = getSelectedAirline();
   const paxRaw = document.getElementById('f_pax').value;
   const pax = paxRaw === '' ? 1 : parseInt(paxRaw, 10);
@@ -1602,7 +1595,6 @@ document.getElementById('saveNewBtn').addEventListener('click', async ()=>{
     departure_date: depDate,
     flight_route: route,
     departure_time: depTime,
-    arrival_time: arrTime,
     airline: airline,
     pax: paxCount,
     total: total,
@@ -1894,7 +1886,6 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   document.getElementById('f_depdate').value = '';
   document.getElementById('f_route').value = '';
   document.getElementById('f_deptime').value = '';
-  document.getElementById('f_arrtime').value = '';
   document.getElementById('f_airline').value = '';
   document.getElementById('f_airline_other').value = '';
   document.getElementById('f_airline_other').style.display = 'none';
@@ -1908,12 +1899,6 @@ document.getElementById('addTicketBtn').addEventListener('click', ()=>{
   detailOverlay.classList.remove('show');
   resetModalSize(newOverlay);
   newOverlay.classList.add('show');
-});
-
-document.getElementById('addHotelBtn').addEventListener('click', ()=>{
-  const r = records.find(x=>x.id === currentDetailId);
-  if(!r) return;
-  openNewHotelForm(r);
 });
 
 /* ---------- Hotel Bookings — fully independent of the ticket form/data ---------- */
@@ -2188,27 +2173,31 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     return status;
   });
 
-  const ticketRows = allTickets.length
-    ? allTickets.map((t, idx)=>{
-        const rate = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / (Number(t.pax)||1));
-        const status = ticketPaidStatus[idx];
-        const rowStyle = status === 'paid' ? ' style="background:#FBF1DC;"' : '';
-        const statusLabel = status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid';
-        return `
-        <tr${rowStyle}>
-          <td>${t.booking_date || t.date || ''}</td>
-          <td>${t.departure_date || t.date || ''}</td>
-          <td>${t.departure_time ? formatTime12(t.departure_time) : '—'}</td>
-          <td>${escapeHtml(t.passenger_name || '—')}</td>
-          <td>${escapeHtml(t.flight_route || '—')}</td>
-          <td>${escapeHtml(t.airline || '—')}</td>
-          <td style="text-align:center">${t.pax || 1}</td>
-          <td style="text-align:right">${peso(rate)}</td>
-          <td style="text-align:right">${peso(t.amount)}</td>
-          <td style="text-align:center">${statusLabel}</td>
-        </tr>`;
-      }).join('')
-    : '<tr><td colspan="10">No tickets recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
+  function ticketRowsFor(forStaff){
+    if(!allTickets.length){
+      return '<tr><td colspan="' + (forStaff ? 11 : 10) + '">No tickets recorded' + (!hasRange ? '.' : ' for this date range.') + '</td></tr>';
+    }
+    return allTickets.map((t, idx)=>{
+      const rate = (t.unit_amount !== undefined && t.unit_amount !== null) ? t.unit_amount : (Number(t.amount||0) / (Number(t.pax)||1));
+      const status = ticketPaidStatus[idx];
+      const rowStyle = status === 'paid' ? ' style="background:#FBF1DC;"' : '';
+      const statusLabel = status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid';
+      return `
+      <tr${rowStyle}>
+        <td>${t.booking_date || t.date || ''}</td>
+        <td>${t.departure_date || t.date || ''}</td>
+        <td>${t.departure_time ? formatTime12(t.departure_time) : '—'}</td>
+        <td>${escapeHtml(t.passenger_name || '—')}</td>
+        <td>${escapeHtml(t.flight_route || '—')}</td>
+        <td>${escapeHtml(t.airline || '—')}</td>
+        <td style="text-align:center">${t.pax || 1}</td>
+        <td style="text-align:right">${peso(rate)}</td>
+        <td style="text-align:right">${peso(t.amount)}</td>
+        ${forStaff ? `<td style="text-align:right">${peso(t.capital_total || 0)}</td>` : ''}
+        <td style="text-align:center">${statusLabel}</td>
+      </tr>`;
+    }).join('');
+  }
 
   const paymentRows = allPayments.length
     ? allPayments.map(p=>`<tr><td>${p.date}</td><td style="text-align:right">${peso(p.amount)}</td></tr>`).join('')
@@ -2253,17 +2242,18 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
     <table>
       <thead><tr>
         <th style="text-align:left">Booking Date</th>
-        <th style="text-align:left">Departure Date</th>
+        <th style="text-align:left">Departure / Check-in Date</th>
         <th style="text-align:left">Departure Time</th>
         <th style="text-align:left">Passenger</th>
-        <th style="text-align:left">Flight Route</th>
+        <th style="text-align:left">Flight Route / Hotel Name</th>
         <th style="text-align:left">Airline</th>
         <th style="text-align:center">Pax</th>
         <th style="text-align:right">Rate per Pax</th>
         <th style="text-align:right">Amount</th>
+        ${forStaff ? '<th style="text-align:right">Capital</th>' : ''}
         <th style="text-align:center">Status</th>
       </tr></thead>
-      <tbody>${ticketRows}</tbody>
+      <tbody>${ticketRowsFor(forStaff)}</tbody>
     </table>
 
     ${allHotels.length > 0 ? `
@@ -2430,14 +2420,14 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
     alert('Open a folder (Other or LGU) first — CSV export is per-folder.');
     return;
   }
-  const headers = ['Record No','Account Name','Passenger Name','Booking Date','Departure Date','Flight Route','Departure Time','Arrival Time','Airline','Pax','Ticket Amount (per pax)','Total','Capital (Total)','Amount Paid (Account Total)','Balance (Account Total)','Status','Remark'];
+  const headers = ['Record No','Account Name','Passenger Name','Booking Date','Departure / Check-in Date','Flight Route / Hotel Name','Departure Time','Airline','Pax','Ticket Amount (per pax)','Total','Capital (Total)','Amount Paid (Account Total)','Balance (Account Total)','Status','Remark'];
   const rows = [];
   folderRecords().forEach(r=>{
     const tickets = (r.ticket_history && r.ticket_history.length) ? r.ticket_history : [{date:r.entry_date, amount:r.ticket_amount}];
     tickets.forEach(t=>{
       rows.push([
         r.record_no, r.customer_name, t.passenger_name || '', t.booking_date || t.date || '', t.departure_date || '', t.flight_route || '',
-        t.departure_time || '', t.arrival_time || '', t.airline || '', t.pax || 1,
+        t.departure_time || '', t.airline || '', t.pax || 1,
         (t.unit_amount !== undefined ? t.unit_amount : t.amount) || 0, t.total || t.amount || 0,
         r.capital, r.amount_paid, r.balance, r.status,
         (r.remark||'').replace(/"/g,'""')
